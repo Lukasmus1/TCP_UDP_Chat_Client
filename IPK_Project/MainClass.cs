@@ -12,9 +12,8 @@ class MainClass
     }
     static void Main(string[] args)
     {
-        bool reqArgT = false;
-        bool reqArgS = false;
         bool? isTcp = null; //true = TCP, false = UDP
+        string? argS = null;
         UInt16 argP = 4567;
         UInt16 argD = 250;
         byte argR = 3;
@@ -24,13 +23,32 @@ class MainClass
             switch (args[i])
             {
                 case "-t":
-                    reqArgT = true;
                     isTcp = true;
+                    ArgLenCheck(i, args.Length);
+                    if (args[i + 1] == "udp")
+                    {
+                        isTcp = false;
+                    }
+                    else if (args[i + 1] == "tcp")
+                    {
+                        isTcp = true;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Error: -t");
+                        Environment.Exit(1);
+                    }
+                    i++;
                     break;
                 
                 case "-s":
-                    reqArgS = true;
-                    isTcp = false;
+                    ArgLenCheck(i, args.Length);
+                    if (Uri.CheckHostName(args[i + 1]) == UriHostNameType.Unknown)
+                    {
+                        Console.WriteLine("Error: -s");
+                        Environment.Exit(1);
+                    }
+                    argS = args[i + 1];
                     break;
                 
                 case "-p":
@@ -74,7 +92,7 @@ class MainClass
                     break;
             }
         }
-        if (!(reqArgT && reqArgS) || isTcp == null)
+        if (!(isTcp == null || argS == null))
         {
             Console.WriteLine("Error: -t and -s are required");
             Environment.Exit(1);
