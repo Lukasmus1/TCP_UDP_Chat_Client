@@ -1,101 +1,65 @@
-﻿namespace IPK_Project;
+﻿using System.Net;
+using System.Net.Sockets;
+using CommandLine;
+
+namespace IPK_Project;
 
 class MainClass
 {
-    static void ArgLenCheck(int i, int len)
-    {
-        if (i + 1 >= len)
-        {
-            Console.WriteLine("Error: argument missing");
-            Environment.Exit(1);
-        }
-    }
     static void Main(string[] args)
     {
-        bool? isTcp = null; //true = TCP, false = UDP
-        string? argS = null;
-        UInt16 argP = 4567;
-        UInt16 argD = 250;
-        byte argR = 3;
-        
-        for (int i = 0; i < args.Length; i++)
-        {
-            switch (args[i])
+        string? connectionType = null;
+        string? server = null;
+        ushort port = 4576;
+        ushort data = 250;
+        byte repeat = 3;
+
+        var parser = new Parser(config => config.HelpWriter = TextWriter.Null);
+        parser.ParseArguments<ArgParserOptions>(args)
+            .WithParsed(o =>
             {
-                case "-t":
-                    isTcp = true;
-                    ArgLenCheck(i, args.Length);
-                    if (args[i + 1] == "udp")
-                    {
-                        isTcp = false;
-                    }
-                    else if (args[i + 1] == "tcp")
-                    {
-                        isTcp = true;
-                    }
-                    else
-                    {
-                        Console.WriteLine("Error: -t");
-                        Environment.Exit(1);
-                    }
-                    i++;
-                    break;
-                
-                case "-s":
-                    ArgLenCheck(i, args.Length);
-                    if (Uri.CheckHostName(args[i + 1]) == UriHostNameType.Unknown)
-                    {
-                        Console.WriteLine("Error: -s");
-                        Environment.Exit(1);
-                    }
-                    argS = args[i + 1];
-                    break;
-                
-                case "-p":
-                    ArgLenCheck(i, args.Length);
-                    if (!UInt16.TryParse(args[i + 1], out argP))
-                    {
-                        Console.WriteLine("Error: -p");
-                        Environment.Exit(1);
-                    }
-                    i++;
-                    break;
-                
-                case "-d":
-                    ArgLenCheck(i, args.Length);
-                    if (!UInt16.TryParse(args[i + 1], out argD))
-                    {
-                        Console.WriteLine("Error: -d");
-                        Environment.Exit(1);
-                    }
-                    i++;
-                    break;
-                
-                case "-r":
-                    ArgLenCheck(i, args.Length);
-                    if (!byte.TryParse(args[i + 1], out argR))
-                    {
-                        Console.WriteLine("Error: -r");
-                        Environment.Exit(1);
-                    }
-                    i++;
-                    break;
-                
-                case "-h":
-                    Console.WriteLine("\nPomocníček :koteseni:");
+                connectionType = o.ConnectionType;
+                server = o.Server;
+                port = o.Port;
+                data = o.Data;
+                repeat = o.Repeat;
+
+                if (o.Help)
+                {
+                    Console.WriteLine("\n-t Required. Transport protocol used for connection (TCP/UDP).\n\n" +
+                                      "-s Required. Server IP or hostname\n\n" +
+                                      "-p Server port. (Default: 4576)\n\n" +
+                                      "-d UDP confirmation timeout (Default: 250)\n\n" +
+                                      "-r Maximum number of UDP retransmissions (Default: 3)\n\n" +
+                                      "-h Display help screen\n");
                     Environment.Exit(0);
-                    break;
-                
-                default:
-                    Console.WriteLine("Error: unknown argument");
-                    Environment.Exit(1);
-                    break;
-            }
-        }
-        if (!(isTcp == null || argS == null))
+                }
+            });
+
+        if (connectionType == null || server == null || connectionType.ToLower() is not ("tcp" or "udp"))
         {
-            Console.WriteLine("Error: -t and -s are required");
+            Console.WriteLine("Missing required arguments. Use -h for help.");
             Environment.Exit(1);
         }
+        
+        IConnection client;
+        if (connectionType == "tcp")
+        {
+            client = new TcpConnection(server!, port);
+        }
+        else
+        {
+            client = new UdpConnection(server!, port, data, repeat);
+        }
+
+        if (!client.Connect(out var stream))
+        {
+            Console.WriteLine("Failed to connect to the server.");
+            Environment.Exit(1);
+        }
+        
+        ChatClient chatClient = new ChatClient(stream);
+        chatClient.Start();
+        
     }
 }
