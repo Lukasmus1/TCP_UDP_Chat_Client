@@ -2,11 +2,10 @@
 
 namespace IPK_Project;
 
-
-//REGEXY MOŽNÁ KOMPLET ŠPATNĚ
 public class StatesBehaviour
 {
-    private const string helpMsg = "Commands:\n" +
+    private const string Reply = @"^REPLY (OK|NOK) IS .*\r\n$";
+    private const string HelpMsg = "\nCommands:\n" +
                             "/auth <username> <password> <secret> - authenticate user\n" +
                             "/join <channel> - join channel\n" +
                             "/rename <newname> - rename user\n" +
@@ -18,13 +17,13 @@ public class StatesBehaviour
         switch (splitInput[0])
         {
             case "/auth":
-                if (splitInput.Length < 4 &&
+                if (splitInput.Length < 5 &&
                     splitInput[1].Length <= 20 && Regex.IsMatch(splitInput[1], @"^[A-z0-9-]*$") && 
-                    splitInput[2].Length <= 20 && Regex.IsMatch(splitInput[2], @"^[\\x21-\\x7E]*$") &&
-                    splitInput[3].Length <= 128 && Regex.IsMatch(splitInput[3], @"^[\\x20-\\x7E]*$"))
+                    splitInput[2].Length <= 20 && Regex.IsMatch(splitInput[2], @"^[!-~]*$") &&
+                    splitInput[3].Length <= 128 && Regex.IsMatch(splitInput[3], @"^[A-z0-9-]*$"))
                 {
                     nextState = StatesEnum.Auth;
-                    return @"AUTH " + splitInput[1] + "AS" + splitInput[2] + "USING" + splitInput[3];
+                    return @"AUTH " + splitInput[1] + " AS " + splitInput[2] + " USING " + splitInput[3];
                 }
 
                 Console.WriteLine("Invalid input");
@@ -42,7 +41,7 @@ public class StatesBehaviour
                 return "err";
             
             case "/help":
-                Console.WriteLine(helpMsg);
+                Console.WriteLine(HelpMsg);
                 nextState = StatesEnum.Start;
                 return "err";
             
@@ -52,23 +51,17 @@ public class StatesBehaviour
                 return "err";
         }
     }
-    public static string Auth(string input, out StatesEnum nextState)
+    public static string Auth(string response, out StatesEnum nextState)
     {
-        switch (input)
+        if (Regex.IsMatch(response, Reply))
         {
-            case "/auth":
-                break;
-            case "/join":
-                break;
-            case "/rename":
-                break;
-            case "/help":
-                Console.WriteLine(helpMsg);
-                nextState = StatesEnum.Start;
-                break;
-            default:
-                //idk
-                break;
+            nextState = StatesEnum.Open;
+            return "err";
+        }
+        else
+        {
+            nextState = StatesEnum.Auth;
+            return "err";
         }
     }
     public static string Open(string input, out StatesEnum nextState)
@@ -82,13 +75,16 @@ public class StatesBehaviour
             case "/rename":
                 break;
             case "/help":
-                Console.WriteLine(helpMsg);
+                Console.WriteLine(HelpMsg);
                 nextState = StatesEnum.Start;
                 break;
             default:
                 //idk
                 break;
         }
+
+        nextState = StatesEnum.Err;
+        return "err";
     }
     public static string Err(string input, out StatesEnum nextState)
     {
@@ -101,13 +97,15 @@ public class StatesBehaviour
             case "/rename":
                 break;
             case "/help":
-                Console.WriteLine(helpMsg);
+                Console.WriteLine(HelpMsg);
                 nextState = StatesEnum.Start;
                 break;
             default:
                 //idk
                 break;
         }
+        nextState = StatesEnum.Err;
+        return "err";
     }
     public static string Bye(string input, out StatesEnum nextState)
     {
@@ -120,12 +118,14 @@ public class StatesBehaviour
             case "/rename":
                 break;
             case "/help":
-                Console.WriteLine(helpMsg);
+                Console.WriteLine(HelpMsg);
                 nextState = StatesEnum.Start;
                 break;
             default:
                 //idk
                 break;
         }
+        nextState = StatesEnum.Err;
+        return "err";
     }
 }

@@ -21,14 +21,14 @@ public class ChatClient
         _stream.Write(buffer, 0, buffer.Length);
     }
     
-    public void GetResponse()
+    public string GetResponse()
     {
         byte[] responseBuffer = new byte[1024];
         int bytesRead = _stream.Read(responseBuffer, 0, responseBuffer.Length);
         string response = Encoding.UTF8.GetString(responseBuffer, 0, bytesRead);
-        Console.WriteLine("Response from server: " + response);
+        return response;
     }
-    
+    //REPLY OK IS ahojky\r\n
     public void Start()
     {
         while (true)
@@ -45,7 +45,8 @@ public class ChatClient
                     sendToServer = StatesBehaviour.Start(input, out _state);
                     break;
                 case StatesEnum.Auth:
-                    sendToServer = StatesBehaviour.Auth(input, out _state);
+                    string response = GetResponse();
+                    sendToServer = StatesBehaviour.Auth(response, out _state);
                     break;
                 case StatesEnum.Open:
                     sendToServer = StatesBehaviour.Open(input, out _state);
@@ -67,10 +68,6 @@ public class ChatClient
             }
             
             SendInput(sendToServer);
-            
-            
-            
-            GetResponse();
         }
     }
 }
