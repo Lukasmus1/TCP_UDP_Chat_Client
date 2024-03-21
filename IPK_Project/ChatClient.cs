@@ -1,7 +1,6 @@
-﻿using System.ComponentModel.Design.Serialization;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
-using System.Threading;
+using System.Text.RegularExpressions;
 
 namespace IPK_Project;
 
@@ -10,21 +9,18 @@ public class ChatClient
     private NetworkStream _stream;
     private StatesEnum _state;
     private List<string?> _inputs = [];
-    private Task _mainRef;
-    private SemaphoreSlim _pool;
-    private bool _isExpectingResponse = false;
-    private bool _badResponse = false;
     private List<string> _responses = [];
+    private string _displayName;
+    
+    private const string ErrPattern = @"ERR FROM ([!-~]*) IS ([ -~]*)\r\n";
 
     public ChatClient(NetworkStream stream)
     {
-        _pool = new SemaphoreSlim(0, 1);
-        
         _stream = stream;
         _state = StatesEnum.Start;
         
         Task.Run(GetResponseAsync);
-        Task.Run(GetInput);
+        Task.Run(GetInputAsync);
     }
 
     private void SendInput(string input)
@@ -33,19 +29,21 @@ public class ChatClient
         _stream.Write(buffer, 0, buffer.Length);
     }
 
-    private async Task<string> GetResponseAsync()
+    private async Task GetResponseAsync()
     {
-        while (true)
+        while (_state != StatesEnum.End)
         {
             byte[] responseBuffer = new byte[1024];
             int bytesRead = await _stream.ReadAsync(responseBuffer, 0, responseBuffer.Length);
-            _responses.Add(Encoding.UTF8.GetString(responseBuffer, 0, bytesRead));
+            //Je možné, že to sebere 2 věci najendou
+            string response = Encoding.UTF8.GetString(responseBuffer, 0, bytesRead);
+            _responses.Add(response);
         }
     }
 
-    private async Task<int> GetInput()
+    private async Task GetInputAsync()
     {
-        while (true)
+        while (_state != StatesEnum.End)
         {
             string? input = await Console.In.ReadLineAsync();
             _inputs.Add(input);
@@ -55,30 +53,31 @@ public class ChatClient
     //REPLY OK IS ahojky
     public void MainBegin()
     {
-        string? input = null;
         string sendToServer;
-        while (true)
+        while (_state != StatesEnum.End)
         {
-            Task.Delay(50);
+            Task.Delay(50).Wait();
             sendToServer = "";
             switch (_state)
             {
                 case StatesEnum.Start:
-                    sendToServer = StatesBehaviour.Start(out _isExpectingResponse, out _state, ref _inputs);
+                    (sendToServer, _displayName) = StatesBehaviour.Start(out _state, ref _inputs);
                     break;
                 case StatesEnum.Auth:
                     sendToServer = StatesBehaviour.Auth(ref _responses, out _state);
                     break;
                 case StatesEnum.Open:
-                    sendToServer = StatesBehaviour.Open(input, out _state);
-                    break;
-                case StatesEnum.End:
-                    sendToServer = StatesBehaviour.Bye(input, out _state);
+                    sendToServer = StatesBehaviour.Open(ref _inputs, ref _responses, out _state, _displayName);
                     break;
                 case StatesEnum.Err:
                     break;
-                default:
-                    break;
+                case StatesEnum.End:
+                    continue;
+            }
+
+            if (_responses.Any(x => Regex.IsMatch(x, ErrPattern)) || _state == StatesEnum.End)
+            {
+                break;
             }
             
             if (sendToServer == "err")
@@ -88,5 +87,7 @@ public class ChatClient
             
             SendInput(sendToServer);
         }
+        
+        //UKONČI VŠECHNY TASKY
     }
 }
