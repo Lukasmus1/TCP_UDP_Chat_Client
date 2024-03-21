@@ -1,5 +1,7 @@
-﻿using System.Net.Sockets;
+﻿using System.ComponentModel.Design.Serialization;
+using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace IPK_Project;
 
@@ -7,87 +9,84 @@ public class ChatClient
 {
     private NetworkStream _stream;
     private StatesEnum _state;
+    private List<string?> _inputs = [];
+    private Task _mainRef;
+    private SemaphoreSlim _pool;
+    private bool _isExpectingResponse = false;
+    private bool _badResponse = false;
+    private List<string> _responses = [];
 
     public ChatClient(NetworkStream stream)
     {
+        _pool = new SemaphoreSlim(0, 1);
+        
         _stream = stream;
         _state = StatesEnum.Start;
-        Start();
+        
+        Task.Run(GetResponseAsync);
+        Task.Run(GetInput);
     }
-    
-    public async Task<int> SendInput(string input)
+
+    private void SendInput(string input)
     {
         byte[] buffer = Encoding.UTF8.GetBytes(input);
-        await _stream.WriteAsync(buffer, 0, buffer.Length);
-        return 0;
+        _stream.Write(buffer, 0, buffer.Length);
+    }
+
+    private async Task<string> GetResponseAsync()
+    {
+        while (true)
+        {
+            byte[] responseBuffer = new byte[1024];
+            int bytesRead = await _stream.ReadAsync(responseBuffer, 0, responseBuffer.Length);
+            _responses.Add(Encoding.UTF8.GetString(responseBuffer, 0, bytesRead));
+        }
+    }
+
+    private async Task<int> GetInput()
+    {
+        while (true)
+        {
+            string? input = await Console.In.ReadLineAsync();
+            _inputs.Add(input);
+        }
     }
     
-    public async Task<string> GetResponseAsync()
+    //REPLY OK IS ahojky
+    public void MainBegin()
     {
-        byte[] responseBuffer = new byte[1024];
-        int bytesRead = await _stream.ReadAsync(responseBuffer, 0, responseBuffer.Length);
-        string response = Encoding.UTF8.GetString(responseBuffer, 0, bytesRead);
-        return response;
-    }
-    
-    public async Task<string?> GetInput()
-    {
-        string? input = await Console.In.ReadLineAsync();
-        return input;
-    }
-    
-    //REPLY OK IS ahojky\r
-    public async void Start()
-    {
-        bool isWatingForResponse = false;
-        string response = "";
         string? input = null;
         string sendToServer;
         while (true)
         {
-            if (!isWatingForResponse)
-            { 
-                input = GetInput();
-                Console.WriteLine("input: " + input);
-            }
-            isWatingForResponse = false;
-            
-            if (input == null)
-            {
-                continue;
-            }
-            
+            Task.Delay(50);
             sendToServer = "";
             switch (_state)
             {
                 case StatesEnum.Start:
-                    sendToServer = StatesBehaviour.Start(input, out isWatingForResponse, out _state);
+                    sendToServer = StatesBehaviour.Start(out _isExpectingResponse, out _state, ref _inputs);
                     break;
                 case StatesEnum.Auth:
-                    sendToServer = StatesBehaviour.Auth(response, out _state);
+                    sendToServer = StatesBehaviour.Auth(ref _responses, out _state);
                     break;
                 case StatesEnum.Open:
                     sendToServer = StatesBehaviour.Open(input, out _state);
                     break;
-                case StatesEnum.Err:
-                    sendToServer = StatesBehaviour.Err(input, out _state);
-                    break;
-                case StatesEnum.Bye:
+                case StatesEnum.End:
                     sendToServer = StatesBehaviour.Bye(input, out _state);
                     break;
-                case StatesEnum.End:
+                case StatesEnum.Err:
                     break;
                 default:
                     break;
             }
+            
             if (sendToServer == "err")
             {
-                //Task.Delay(10);
                 continue;
             }
             
-            await SendInput(sendToServer);
-            response = await GetResponseAsync();
+            SendInput(sendToServer);
         }
     }
 }

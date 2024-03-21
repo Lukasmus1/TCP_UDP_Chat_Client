@@ -6,6 +6,5 @@ public enum StatesEnum
     Auth,
     Open,
     Err,
-    Bye,
     End
 }

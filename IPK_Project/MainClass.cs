@@ -59,7 +59,7 @@ class MainClass
         }
         
         ChatClient chatClient = new ChatClient(stream);
-        chatClient.Start();
+        chatClient.MainBegin();
         
     }
 }
