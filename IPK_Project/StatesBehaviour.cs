@@ -7,6 +7,7 @@ public class StatesBehaviour
     //TADY NA KONEC ODSTRAŇ \n JE TU JENOM JAKO DEBUG
     private const string ReplyOk = @"^REPLY OK IS ([ -~]*)\n$";
     private const string ReplyNok = @"^REPLY NOK IS ([ -~]*)\n$";
+    private const string ReplyMsg = @"^MSG FROM ([!-~]*) IS ([ -~]*)\n$";
     private const string HelpMsg = "\nCommands:\n" +
                             "/auth <username> <password> <secret> - authenticate user\n" +
                             "/join <channel> - join channel\n" +
@@ -21,7 +22,7 @@ public class StatesBehaviour
             return ("err", "err");
         }
         
-        string? input = inputs[0];
+        string input = inputs[0];
         inputs.RemoveAt(0);
         
         string[] splitInput = input.ToLower().Split(" ");
@@ -71,19 +72,18 @@ public class StatesBehaviour
         else if (Regex.IsMatch(responses[0], ReplyOk))
         {
             nextState = StatesEnum.Open;
+            Console.Error.WriteLine(@"Success: " + responses[0].Split(" ")[3]);
             responses.RemoveAt(0);
-            //JOIN NA DEFAUILT SERVER
             return "err";
         }
         else if (Regex.IsMatch(responses[0], ReplyNok))
         {
             nextState = StatesEnum.Auth;
-            Console.WriteLine("Authentication failed");
+            Console.Error.WriteLine(@"Failure: " + responses[0].Split(" ")[3]);
             responses.RemoveAt(0);
             return "err";
         }
         
-        responses.RemoveAt(0);
         nextState = StatesEnum.End;
         return "err";
     }
@@ -91,7 +91,7 @@ public class StatesBehaviour
     {
         string sendToServer = "err";
         nextState = StatesEnum.Open;
-        
+
         if (inputs.Count > 0)
         {
             string[] input = inputs[0].ToLower().Split(" ");
@@ -102,6 +102,7 @@ public class StatesBehaviour
                     {
                         sendToServer = @"JOIN " + input[1] + " AS " + displayName + "\n";
                     }
+
                     break;
                 case "/help":
                     Console.WriteLine(HelpMsg);
@@ -110,20 +111,34 @@ public class StatesBehaviour
                 default:
                     if (Regex.IsMatch(input[0], @"^[ -~]*$"))
                     {
-                        sendToServer = "MSG FROM " + displayName + " IS " + input[0] + "\n";
+                        sendToServer = "MSG FROM " + displayName + " IS " + input + "\n";
                     }
                     else
                     {
                         Console.WriteLine("Invalid input");
                     }
+
                     break;
             }
+
             inputs.RemoveAt(0);
         }
-        
+
         if (responses.Count > 0)
         {
-            Console.WriteLine(responses[0]);
+            string[] responseSplit = responses[0].Split(" ");
+            if (Regex.IsMatch(responses[0], ReplyOk))
+            {
+                Console.WriteLine("Success: " + responseSplit[3]);
+            }
+            else if (Regex.IsMatch(responses[0], ReplyNok))
+            {
+                Console.WriteLine("Failure: " + responseSplit[3]);
+            }
+            else if (Regex.IsMatch(responses[0], ReplyMsg))
+            {
+                Console.WriteLine(responseSplit[2] + ": " + string.Join(" ", responseSplit.Skip(4)));
+            }
             responses.RemoveAt(0);
         }
         

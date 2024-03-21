@@ -51,6 +51,7 @@ public class ChatClient
     }
     
     //REPLY OK IS ahojky
+    //MSG FROM nejakejDement IS ahojky troubo
     public void MainBegin()
     {
         string sendToServer;
