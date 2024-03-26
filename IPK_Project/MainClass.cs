@@ -10,7 +10,7 @@ class MainClass
     {
         string? connectionType = null;
         string? server = null;
-        ushort port = 4576;
+        ushort port = 4567;
         ushort data = 250;
         byte repeat = 3;
 
@@ -59,6 +59,7 @@ class MainClass
         }
         
         ChatClient chatClient = new ChatClient(stream);
+        Console.CancelKeyPress += chatClient.EndProgram;
         chatClient.MainBegin();
         
     }

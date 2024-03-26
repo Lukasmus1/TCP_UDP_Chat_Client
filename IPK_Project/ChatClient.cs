@@ -1,18 +1,16 @@
 ﻿using System.Net.Sockets;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace IPK_Project;
 
 public class ChatClient
 {
-    private NetworkStream _stream;
+    private readonly NetworkStream _stream;
     private StatesEnum _state;
-    private List<string?> _inputs = [];
-    private List<string> _responses = [];
+    private bool _asyncEnd;
+    private Queue<string?> _inputs = [];
+    private Queue<string> _responses = [];
     private string _displayName;
-    
-    private const string ErrPattern = @"ERR FROM ([!-~]*) IS ([ -~]*)\r\n";
 
     public ChatClient(NetworkStream stream)
     {
@@ -25,19 +23,23 @@ public class ChatClient
 
     private void SendInput(string input)
     {
-        byte[] buffer = Encoding.UTF8.GetBytes(input);
+        byte[] buffer = Encoding.ASCII.GetBytes(input);
         _stream.Write(buffer, 0, buffer.Length);
     }
 
     private async Task GetResponseAsync()
     {
+        byte[] responseBuffer = new byte[1024];
         while (_state != StatesEnum.End)
         {
-            byte[] responseBuffer = new byte[1024];
             int bytesRead = await _stream.ReadAsync(responseBuffer, 0, responseBuffer.Length);
-            //Je možné, že to sebere 2 věci najendou
             string response = Encoding.UTF8.GetString(responseBuffer, 0, bytesRead);
-            _responses.Add(response);
+            string[] responseArr = response.Split("\r\n");
+            foreach (var res in responseArr.Where(res => !string.IsNullOrWhiteSpace(res)))
+            {
+                var resEnq = res + "\r\n";
+                _responses.Enqueue(resEnq);
+            }
         }
     }
 
@@ -45,20 +47,23 @@ public class ChatClient
     {
         while (_state != StatesEnum.End)
         {
+            if (Console.In.Peek() == -1 && _inputs.Count == 0)
+            {
+                _asyncEnd = true;
+                _state = StatesEnum.End;
+                break;
+            }
             string? input = await Console.In.ReadLineAsync();
-            _inputs.Add(input);
+            _inputs.Enqueue(input);
         }
     }
-    
-    //REPLY OK IS ahojky
-    //MSG FROM nejakejDement IS ahojky troubo
+
     public void MainBegin()
     {
-        string sendToServer;
         while (_state != StatesEnum.End)
         {
             Task.Delay(50).Wait();
-            sendToServer = "";
+            string sendToServer = "";
             switch (_state)
             {
                 case StatesEnum.Start:
@@ -71,13 +76,13 @@ public class ChatClient
                     sendToServer = StatesBehaviour.Open(ref _inputs, ref _responses, out _state, _displayName);
                     break;
                 case StatesEnum.Err:
+                    sendToServer = StatesBehaviour.Err(out _state);
                     break;
-                case StatesEnum.End:
-                    continue;
             }
 
-            if (_responses.Any(x => Regex.IsMatch(x, ErrPattern)) || _state == StatesEnum.End)
+            if (_state == StatesEnum.End || _asyncEnd)
             {
+                SendInput(Patterns.ByePattern);
                 break;
             }
             
@@ -88,7 +93,19 @@ public class ChatClient
             
             SendInput(sendToServer);
         }
-        
-        //UKONČI VŠECHNY TASKY
+    }
+
+    public void EndProgram(object? sender, ConsoleCancelEventArgs e)
+    {
+        if (_state != StatesEnum.Start)
+        {
+            e.Cancel = true;
+            _asyncEnd = true;
+            _state = StatesEnum.End;
+        }
+        else
+        {
+            e.Cancel = false;
+        }
     }
 }
