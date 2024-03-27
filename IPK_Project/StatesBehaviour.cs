@@ -131,7 +131,7 @@ public class StatesBehaviour
             }
             else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyErrPattern))
             {
-                Console.WriteLine("ERR FROM " + responseSplit[2] + ": " + string.Join(" ", responseSplit[4]));
+                Console.WriteLine("ERR FROM " + responseSplit[2] + ": " + string.Join(" ", responseSplit.Skip(4)));
                 nextState = StatesEnum.End;
                 return Patterns.ByePattern;
             }

@@ -17,11 +17,11 @@ public class UdpChatClient
     private ushort _msgCounter;
     private string _server;
     private ushort _port;
-    private ushort _data;
-    private byte _repeat;
-    //Jsou tu 2 aby se neztrácel čas překonvertováváním na string, protože tam je timer
-    private Queue<byte[]> _responses = [];
+    private readonly ushort _data;
+    private readonly byte _repeat;
+    private List<byte[]> _confirms = [];
     private Queue<string> _responsesStr = [];
+    
     
     public UdpChatClient(UdpClient client,string server, ushort port, ushort data, byte repeat)
     {
@@ -33,7 +33,7 @@ public class UdpChatClient
         _client = client;
         
         _state = StatesEnum.Start;
-        
+
         _msgCounter = 0;
         Task.Run(GetInputAsync);
         Task.Run(GetResponseAsync);
@@ -112,36 +112,112 @@ public class UdpChatClient
 
         return res;
     }
-    private string ConvertToString(byte[] input)
+    private (string, byte[]) ConvertToString(byte[] input)
     {
         string res = "";
+        int i;
         switch (input[0])
         {
             case 0x00:
-                return "confirm";
+                return ("confirm", input.Skip(1).ToArray());
             case 0x01:
-                res = "NOK";
+                res = "REPLY ";
+                if (input[3] == 1)
+                {
+                    res += "OK ";
+                }
+                else
+                {
+                    res += "NOK ";
+                }
+
+                res += "IS ";
+                res += Encoding.ASCII.GetString(input, 6, input.Length - 6) + "\r\n";
                 break;
             case 0x02:
-                res = "AUTH";
+                res = "AUTH ";
+                i = 0;
+                while(input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += " AS ";
+                i++;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += " USING ";
+                i++;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += "\r\n";
                 break;
             case 0x03:
-                res = "JOIN";
+                res = "JOIN ";
+                i = 2;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += " AS ";
+
+                i++;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += "\r\n";
                 break;
             case 0x04:
-                res = "MSG";
+                res = "MSG FROM ";
+                i = 2;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += " IS ";
+                i++;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += "\r\n";
                 break;
             case 0xFE:
-                res = "ERR";
+                res = "ERR FROM ";
+                i = 2;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += " IS ";
+                i++;
+                while (input[i] != 0x00)
+                {
+                    res += Convert.ToChar(input[i]);
+                    i++;
+                }
+                res += "\r\n";
                 break;
             case 0xFF:
-                res = "BYE";
+                res = "BYE\r\n";
                 break;
             default:
-                return "err";
+                return ("err", [0]);
         }
 
-        return res;
+        return (res, input.Skip(1).Take(2).ToArray());
     }
     
     
@@ -162,16 +238,21 @@ public class UdpChatClient
     
     private async void GetResponseAsync()
     {
-        UdpReceiveResult res;
+        byte[] res;
         string resStr;
+        byte[] msgBytes;
+        IPEndPoint remoteEp = new IPEndPoint(IPAddress.Parse(_server), _port);
         while (_state != StatesEnum.End)
         {
-            res = await _client.ReceiveAsync();
-            _responses.Enqueue(res.Buffer);
-
-            resStr = ConvertToString(res.Buffer);
+            res = _client.Receive(ref remoteEp);
+            (resStr, msgBytes) = ConvertToString(res);
             if (resStr == "confirm")
             {
+                _confirms.Add(res.Skip(1).ToArray());
+                if (_state == StatesEnum.Auth)
+                {
+                    remoteEp = new IPEndPoint(IPAddress.Any, 0);
+                }
                 continue;
             }
             else if (resStr == "err")
@@ -181,54 +262,46 @@ public class UdpChatClient
                 return;
             }
             _responsesStr.Enqueue(resStr);
+            SendInput([0x00, msgBytes[0], msgBytes[1]]);
         }
     }
     
-    private async void HandleOutput(List<byte> input)
+    private async void HandleOutput(List<byte> input, int id)
     {
-        Queue<byte[]> list = [];
-        bool confirmBool = false;
+        byte[] counter = [(byte)(id >> 8), (byte)(id & 0xFF)];
         int tries = 0;
         Timer t = new Timer();
         t.Interval = _data;
         t.Elapsed += (sender, args) =>
         {
             tries += 1;
-            if (tries <= _repeat)
-            {
-                t.Stop();
-                t.Start();
-            }
+            if (tries > _repeat) return;
+            t.Stop();
+            t.Start();
+            SendInput(input);
         };
 
+        //Toto tady je aby se zamezilo erroru, že by se odstranilo z tohoto, když se bude vykonávat ten Contains
+        List<byte[]> clone;
         SendInput(input);
         t.Start();
         while (tries <= _repeat)
         {
-            list = _responses;
-            foreach (byte[] bytes in list)
+            clone = _confirms;
+            if (clone.Any(item => item.SequenceEqual(counter)))            
             {
-                if (bytes[0] == 0x00)
-                {
-                    t.Stop();
-                    confirmBool = true;
-                    break;
-                }
-            }
-            
-            if (confirmBool)
-            {
+                t.Stop();
                 break;
             }
         }
         
-        if (tries > _repeat + 1)
+        if (tries > _repeat)
         {
             _state = StatesEnum.Err;
             return;
         }
 
-        
+        _confirms.Remove(counter);
     }
     
     public void MainBegin()
@@ -240,36 +313,27 @@ public class UdpChatClient
             {
                 case StatesEnum.Start:
                     (_stringToSend, _displayName) = statesBehaviour.Start(out _state, ref _inputs);
-                    if (_stringToSend != "err")
-                    {
-                        _sendToServer = ConvertToBytes(_stringToSend);
-                    }
+
                     break;
                 case StatesEnum.Auth:
                     _stringToSend = statesBehaviour.Auth(ref _inputs, out _state);
-                    if (_stringToSend != "err")
-                    {
-                        _sendToServer = ConvertToBytes(_stringToSend);
-                    }
+
                     break;
                 case StatesEnum.Open:
                     _stringToSend = statesBehaviour.Open(ref _inputs, ref _responsesStr, out _state, _displayName);
-                    if (_stringToSend != "err")
-                    {
-                        _sendToServer = ConvertToBytes(_stringToSend);
-                    }
+
                     break;
                 case StatesEnum.Err:
                     _stringToSend = statesBehaviour.Err(out _state);
-                    if (_stringToSend != "err")
-                    {
-                        _sendToServer = ConvertToBytes(_stringToSend);
-                    }
+
                     break;
             }
 
-
-            //Task.Run(() => HandleOutput(_sendToServer));
+            if (_stringToSend != "err")
+            {
+                _sendToServer = ConvertToBytes(_stringToSend);
+                Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
+            }
         }
     }
 }

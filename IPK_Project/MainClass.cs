@@ -61,11 +61,11 @@ class MainClass
             try
             {
                 client  = new UdpClient(server, port);
-                Console.WriteLine("Connected");
+                Console.WriteLine("Established");
             }
             catch (Exception e)
             {
-                Console.WriteLine("Failed to connect to the server.");
+                Console.WriteLine("Error");
                 Environment.Exit(1);
             }
             
