@@ -42,25 +42,37 @@ class MainClass
             Environment.Exit(1);
         }
         
-        IConnection client;
         if (connectionType == "tcp")
         {
-            client = new TcpConnection(server!, port);
+            TcpConnection client = new TcpConnection(server!, port);
+            if (!client.Connect())
+            {
+                Console.WriteLine("Failed to connect to the server.");
+                Environment.Exit(1);
+            }
+            TcpChatClient tcpChatClient = new TcpChatClient(client.Stream);
+            Console.CancelKeyPress += tcpChatClient.EndProgram;
+            tcpChatClient.MainBegin();
         }
         else
         {
-            client = new UdpConnection(server!, port, data, repeat);
-        }
-
-        if (!client.Connect(out var stream))
-        {
-            Console.WriteLine("Failed to connect to the server.");
-            Environment.Exit(1);
+            UdpClient? client = null;
+            //Tady je to matoucí, UDP se na nic nepřipojuje
+            try
+            {
+                client  = new UdpClient(server, port);
+                Console.WriteLine("Connected");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Failed to connect to the server.");
+                Environment.Exit(1);
+            }
+            
+            UdpChatClient udpChatClient = new UdpChatClient(client, server, port, data, repeat);
+            udpChatClient.MainBegin();
         }
         
-        ChatClient chatClient = new ChatClient(stream);
-        Console.CancelKeyPress += chatClient.EndProgram;
-        chatClient.MainBegin();
         
     }
 }

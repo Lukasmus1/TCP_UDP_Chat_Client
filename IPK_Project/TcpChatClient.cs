@@ -3,7 +3,7 @@ using System.Text;
 
 namespace IPK_Project;
 
-public class ChatClient
+public class TcpChatClient
 {
     private readonly NetworkStream _stream;
     private StatesEnum _state;
@@ -12,7 +12,7 @@ public class ChatClient
     private Queue<string> _responses = [];
     private string _displayName;
 
-    public ChatClient(NetworkStream stream)
+    public TcpChatClient(NetworkStream stream)
     {
         _stream = stream;
         _state = StatesEnum.Start;
@@ -29,7 +29,7 @@ public class ChatClient
 
     private async Task GetResponseAsync()
     {
-        byte[] responseBuffer = new byte[1024];
+        byte[] responseBuffer = new byte[1400];
         while (_state != StatesEnum.End)
         {
             int bytesRead = await _stream.ReadAsync(responseBuffer, 0, responseBuffer.Length);
@@ -43,7 +43,7 @@ public class ChatClient
         }
     }
 
-    private async Task GetInputAsync()
+    private async void GetInputAsync()
     {
         while (_state != StatesEnum.End)
         {
@@ -60,6 +60,7 @@ public class ChatClient
 
     public void MainBegin()
     {
+        StatesBehaviour statesBehaviour = new StatesBehaviour();
         while (_state != StatesEnum.End)
         {
             Task.Delay(50).Wait();
@@ -67,16 +68,16 @@ public class ChatClient
             switch (_state)
             {
                 case StatesEnum.Start:
-                    (sendToServer, _displayName) = StatesBehaviour.Start(out _state, ref _inputs);
+                    (sendToServer, _displayName) = statesBehaviour.Start(out _state, ref _inputs);
                     break;
                 case StatesEnum.Auth:
-                    sendToServer = StatesBehaviour.Auth(ref _responses, out _state);
+                    sendToServer = statesBehaviour.Auth(ref _responses, out _state);
                     break;
                 case StatesEnum.Open:
-                    sendToServer = StatesBehaviour.Open(ref _inputs, ref _responses, out _state, _displayName);
+                    sendToServer = statesBehaviour.Open(ref _inputs, ref _responses, out _state, _displayName);
                     break;
                 case StatesEnum.Err:
-                    sendToServer = StatesBehaviour.Err(out _state);
+                    sendToServer = statesBehaviour.Err(out _state);
                     break;
             }
 
@@ -93,6 +94,8 @@ public class ChatClient
             
             SendInput(sendToServer);
         }
+        
+        _stream.Close();
     }
 
     public void EndProgram(object? sender, ConsoleCancelEventArgs e)

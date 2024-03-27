@@ -4,9 +4,7 @@ namespace IPK_Project;
 
 public class StatesBehaviour
 {
-    //TADY NA KONEC ODSTRAŇ \n JE TU JENOM JAKO DEBUG
-
-    public static (string, string) Start(out StatesEnum nextState, ref Queue<string?> inputs)
+    public (string, string) Start(out StatesEnum nextState, ref Queue<string?> inputs)
     {
         if(inputs.Count < 1)
         {
@@ -21,6 +19,7 @@ public class StatesBehaviour
         {
             case "/auth":
                 if (splitInput.Length < 5 &&
+                    splitInput.Length > 3 &&
                     splitInput[1].Length <= 20 && Regex.IsMatch(splitInput[1], "^[A-z0-9-]*$") && 
                     splitInput[2].Length <= 20 && Regex.IsMatch(splitInput[2], "^[!-~]*$") &&
                     splitInput[3].Length <= 128 && Regex.IsMatch(splitInput[3], "^[A-z0-9-]*$"))
@@ -44,7 +43,7 @@ public class StatesBehaviour
                 return ("err", "err");
         }
     }
-    public static string Auth(ref Queue<string> responses, out StatesEnum nextState)
+    public string Auth(ref Queue<string> responses, out StatesEnum nextState)
     {
         if (responses.Count < 1)
         {
@@ -60,19 +59,19 @@ public class StatesBehaviour
             nextState = StatesEnum.Auth;
             return "err";
         }
-        else if (Regex.IsMatch(input, Patterns.ReplyOk))
+        else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyOk))
         {
             nextState = StatesEnum.Open;
             Console.Error.WriteLine("Success: " + string.Join(" ", input.Split(" ").Skip(3)));
             return "err";
         }
-        else if (Regex.IsMatch(input, Patterns.ReplyNok))
+        else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyNok))
         {
-            nextState = StatesEnum.Auth;
+            nextState = StatesEnum.Start;
             Console.Error.WriteLine("Failure: " + string.Join(" ", input.Split(" ").Skip(3)));
             return "err";
         }
-        else if (Regex.IsMatch(input, Patterns.ReplyErrPattern))
+        else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyErrPattern))
         {
             Console.Error.WriteLine("ERR FROM " + input.Split(" ")[2] + ": " + input.Split(" ")[4]);
             nextState = StatesEnum.End;
@@ -82,14 +81,14 @@ public class StatesBehaviour
         nextState = StatesEnum.End;
         return Patterns.ByePattern;
     }
-    public static string Open(ref Queue<string?> inputs, ref Queue<string> responses, out StatesEnum nextState, string displayName)
+    public string Open(ref Queue<string?> inputs, ref Queue<string> responses, out StatesEnum nextState, string displayName)
     {
         string sendToServer = "err";
         nextState = StatesEnum.Open;
 
         if (inputs.Count > 0)
         {
-            string[] input = inputs.Dequeue().ToLower().Split(" ");
+            string[] input = inputs.Dequeue()!.Split(" ");
             switch (input[0])
             {
                 case "/join":
@@ -118,39 +117,41 @@ public class StatesBehaviour
         {
             string input = responses.Dequeue();
             string[] responseSplit = input.Split(" ");
-            if (Regex.IsMatch(input, Patterns.ReplyOk))
+            if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyOk))
             {
-                Console.WriteLine("Success: " + string.Join(" ", responseSplit.Skip(3)));
+                Console.Write("Success: " + string.Join(" ", responseSplit.Skip(3)));
             }
-            else if (Regex.IsMatch(input, Patterns.ReplyNok))
+            else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyNok))
             {
-                Console.WriteLine("Failure: " + string.Join(" ", responseSplit.Skip(3)));
+                Console.Write("Failure: " + string.Join(" ", responseSplit.Skip(3)));
             }
-            else if (Regex.IsMatch(input, Patterns.ReplyMsg))
+            else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyMsg))
             {
-                Console.WriteLine(responseSplit[2] + ": " + string.Join(" ", responseSplit.Skip(4)));
+                Console.Write(responseSplit[2] + ": " + string.Join(" ", responseSplit.Skip(4)));
             }
-            else if (Regex.IsMatch(input, Patterns.ReplyErrPattern))
+            else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyErrPattern))
             {
+                Console.WriteLine("ERR FROM " + responseSplit[2] + ": " + string.Join(" ", responseSplit[4]));
                 nextState = StatesEnum.End;
                 return Patterns.ByePattern;
             }
-            else if (input == Patterns.ByePattern)
+            else if (input.ToUpper() == Patterns.ByePattern)
             {
                 nextState = StatesEnum.End;
                 return Patterns.ByePattern;
             }
             else
             {
+                Console.WriteLine("ERR: Unknown response");
                 nextState = StatesEnum.Err;
-                return Patterns.GetErrMsg(displayName, "Chybička se vbloudila");
+                return Patterns.GetErrMsg(displayName, "Chybicka se vbloudila");
             }
         }
         
         nextState = StatesEnum.Open;
         return sendToServer;
     }
-    public static string Err(out StatesEnum nextState)
+    public string Err(out StatesEnum nextState)
     {
         nextState = StatesEnum.End;
         return Patterns.ByePattern;

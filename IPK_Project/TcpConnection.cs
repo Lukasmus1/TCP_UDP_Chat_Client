@@ -2,28 +2,26 @@
 using System.Text;
 
 namespace IPK_Project;
-public class TcpConnection(string server, ushort port) : IConnection
+public class TcpConnection(string server, ushort port)
 {
     public string Server { get; set; } = server;
     public ushort Port { get; set; } = port;
-
-    private TcpClient _client;
-    private NetworkStream _stream;
+    public NetworkStream Stream { get; private set; }
     
-    public bool Connect(out NetworkStream stream)
+    private TcpClient _client;
+    
+    public bool Connect()
     {
         try
         {
             _client  = new TcpClient(Server, Port);
-            _stream = _client.GetStream();
+            Stream = _client.GetStream();
             Console.WriteLine("Connected");
         }
         catch (Exception e)
         {
-            stream = _stream;
             return false;
         }
-        stream = _stream;
         return true;
     }
     

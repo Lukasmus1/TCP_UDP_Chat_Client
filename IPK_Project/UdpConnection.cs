@@ -1,15 +1,17 @@
-﻿using System.Net.Sockets;
+﻿using System.Net;
+using System.Net.Sockets;
 
 namespace IPK_Project;
 
-public class UdpConnection : IConnection
+public class UdpConnection
 {
     public string Server { get; set; }
     public ushort Port { get; set; }
     public ushort Data { get; set; }
     public byte Repeat { get; set; }
+    public UdpClient Client { get; private set; }
     
-    private UdpClient client;
+    private IPEndPoint _endPoint;
     
     public UdpConnection(string server, ushort port, ushort data, byte repeat)
     {
@@ -18,12 +20,21 @@ public class UdpConnection : IConnection
         Data = data;
         Repeat = repeat;
         
-        client = new UdpClient(server, port);
+        Client = new UdpClient(server, port);
+        //_endPoint = new IPEndPoint(IPAddress.Parse(server), port);
     }
     
-    public bool Connect(out NetworkStream stream)
+    public bool Connect()
     {
-        stream = null;
+        try
+        {
+            Client  = new UdpClient(Server, Port);
+            Console.WriteLine("Connected");
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
         return true;
     }
 }
