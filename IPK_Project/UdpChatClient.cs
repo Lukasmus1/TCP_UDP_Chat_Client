@@ -1,37 +1,33 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Timers;
-using Timer = System.Timers.Timer;
 
 namespace IPK_Project;
 
 public class UdpChatClient
 {
-    private UdpClient _client;
+    private readonly UdpClient _client;
     private StatesEnum _state;
     private Queue<string> _inputs = [];
     private string _displayName;
     private string _stringToSend;
     private List<byte> _sendToServer;
     private ushort _msgCounter;
-    private string _server;
-    private ushort _port;
     private readonly ushort _data;
     private readonly byte _repeat;
-    private List<byte[]> _confirms = [];
-    private Queue<string> _responsesStr = [];
-    
+    private List<byte[]> _confirms = new();
+    private Queue<string> _responsesStr = new();
+    private IPEndPoint _endPoint;
+    private bool _asyncEnd;
     
     public UdpChatClient(UdpClient client,string server, ushort port, ushort data, byte repeat)
     {
         _state = StatesEnum.Start;
-        _server = server;
-        _port = port;
         _data = data;
         _repeat = repeat;
         _client = client;
-        
+        _endPoint = new IPEndPoint(IPAddress.Parse(server), port);
         _state = StatesEnum.Start;
 
         _msgCounter = 0;
@@ -41,7 +37,7 @@ public class UdpChatClient
     
     private void SendInput(List<byte> input)
     {
-        _client.Send(input.ToArray(), input.Count);
+        _client.Send(input.ToArray(), input.Count, _endPoint);
     }
     
     private List<byte> ConvertToBytes(string input)
@@ -81,9 +77,9 @@ public class UdpChatClient
             case "MSG":
                 resList.Add([0x04]);
                 resList.Add([(byte)(_msgCounter >> 8), (byte)(_msgCounter & 0xFF)]);
-                resList.Add(Encoding.ASCII.GetBytes(splitInput[1]));
+                resList.Add(Encoding.ASCII.GetBytes(splitInput[2]));
                 resList.Add([0x00]);
-                resList.Add(Encoding.ASCII.GetBytes(string.Join(" ", splitInput.Skip(3)).TrimEnd('\r', '\n')));
+                resList.Add(Encoding.ASCII.GetBytes(string.Join(" ", splitInput.Skip(4)).TrimEnd('\r', '\n')));
                 resList.Add([0x00]);
                 _msgCounter++;
                 break;
@@ -98,7 +94,7 @@ public class UdpChatClient
                 _msgCounter++;
                 break;
             
-            case "BYE\r\n":
+            case "BYE":
                 resList.Add([0xFF]);
                 resList.Add([(byte)(_msgCounter >> 8), (byte)(_msgCounter & 0xFF)]);
                 _msgCounter++;
@@ -114,7 +110,7 @@ public class UdpChatClient
     }
     private (string, byte[]) ConvertToString(byte[] input)
     {
-        string res = "";
+        string res;
         int i;
         switch (input[0])
         {
@@ -132,7 +128,7 @@ public class UdpChatClient
                 }
 
                 res += "IS ";
-                res += Encoding.ASCII.GetString(input, 6, input.Length - 6) + "\r\n";
+                res += Encoding.ASCII.GetString(input, 6, input.Length - 7) + "\r\n";
                 break;
             case 0x02:
                 res = "AUTH ";
@@ -178,7 +174,7 @@ public class UdpChatClient
                 break;
             case 0x04:
                 res = "MSG FROM ";
-                i = 2;
+                i = 3;
                 while (input[i] != 0x00)
                 {
                     res += Convert.ToChar(input[i]);
@@ -227,7 +223,7 @@ public class UdpChatClient
         {
             if (Console.In.Peek() == -1 && _inputs.Count == 0)
             {
-                //_asyncEnd = true;
+                _asyncEnd = true;
                 _state = StatesEnum.End;
                 break;
             }
@@ -238,29 +234,35 @@ public class UdpChatClient
     
     private async void GetResponseAsync()
     {
-        byte[] res;
+        UdpReceiveResult res;
         string resStr;
         byte[] msgBytes;
-        IPEndPoint remoteEp = new IPEndPoint(IPAddress.Parse(_server), _port);
+        bool switchPort = true;
         while (_state != StatesEnum.End)
         {
-            res = _client.Receive(ref remoteEp);
-            (resStr, msgBytes) = ConvertToString(res);
-            if (resStr == "confirm")
+            res =  await _client.ReceiveAsync();
+
+            if (res.Buffer[0] == 0x00)
             {
-                _confirms.Add(res.Skip(1).ToArray());
-                if (_state == StatesEnum.Auth)
-                {
-                    remoteEp = new IPEndPoint(IPAddress.Any, 0);
-                }
+                _confirms.Add(res.Buffer.Skip(1).ToArray());
                 continue;
             }
-            else if (resStr == "err")
+            
+            (resStr, msgBytes) = ConvertToString(res.Buffer);
+            if (resStr == "err")
             {
                 //ERR STAV
-                //_state = StatesEnum.Err;
+                _asyncEnd = true;
+                _state = StatesEnum.Err;
                 return;
             }
+            
+            if (resStr[..5].Equals("REPLY") && switchPort)
+            {
+                _endPoint = res.RemoteEndPoint;
+                switchPort = false;
+            }
+            
             _responsesStr.Enqueue(resStr);
             SendInput([0x00, msgBytes[0], msgBytes[1]]);
         }
@@ -269,35 +271,33 @@ public class UdpChatClient
     private async void HandleOutput(List<byte> input, int id)
     {
         byte[] counter = [(byte)(id >> 8), (byte)(id & 0xFF)];
-        int tries = 0;
-        Timer t = new Timer();
-        t.Interval = _data;
-        t.Elapsed += (sender, args) =>
-        {
-            tries += 1;
-            if (tries > _repeat) return;
-            t.Stop();
-            t.Start();
-            SendInput(input);
-        };
-
-        //Toto tady je aby se zamezilo erroru, že by se odstranilo z tohoto, když se bude vykonávat ten Contains
+        Stopwatch sw = new Stopwatch();
+        int currTries = 0;
         List<byte[]> clone;
+        
         SendInput(input);
-        t.Start();
-        while (tries <= _repeat)
+        sw.Start();
+        while (currTries < _repeat)
         {
-            clone = _confirms;
-            if (clone.Any(item => item.SequenceEqual(counter)))            
+            clone = [.._confirms];
+            if (clone.Any(item => item.SequenceEqual(counter)))
             {
-                t.Stop();
+                sw.Stop();
                 break;
+            }
+            if (sw.ElapsedMilliseconds >= _data)
+            {
+                SendInput(input);
+                sw.Restart();
+                currTries++;
             }
         }
         
-        if (tries > _repeat)
+        sw.Stop();
+        if (currTries > _repeat)
         {
             _state = StatesEnum.Err;
+            _asyncEnd = true;
             return;
         }
 
@@ -316,7 +316,7 @@ public class UdpChatClient
 
                     break;
                 case StatesEnum.Auth:
-                    _stringToSend = statesBehaviour.Auth(ref _inputs, out _state);
+                    _stringToSend = statesBehaviour.Auth(ref _responsesStr, out _state);
 
                     break;
                 case StatesEnum.Open:
@@ -328,12 +328,33 @@ public class UdpChatClient
 
                     break;
             }
-
+            
+            if (_state == StatesEnum.End || _asyncEnd)
+            {
+                _sendToServer = ConvertToBytes(Patterns.ByePattern);
+                Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
+                break;
+            }
+            
             if (_stringToSend != "err")
             {
                 _sendToServer = ConvertToBytes(_stringToSend);
                 Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
             }
+        }
+    }
+    
+    public void EndProgram(object? sender, ConsoleCancelEventArgs e)
+    {
+        if (_state != StatesEnum.Start)
+        {
+            e.Cancel = true;
+            _asyncEnd = true;
+            _state = StatesEnum.End;
+        }
+        else
+        {
+            e.Cancel = false;
         }
     }
 }

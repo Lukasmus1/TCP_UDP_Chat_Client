@@ -56,20 +56,11 @@ class MainClass
         }
         else
         {
-            UdpClient? client = null;
-            //Tady je to matoucí, UDP se na nic nepřipojuje
-            try
-            {
-                client  = new UdpClient(server, port);
-                Console.WriteLine("Established");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Error");
-                Environment.Exit(1);
-            }
+            UdpClient client = new UdpClient(0);
+            Console.WriteLine("Use /auth {Username} {DisplayName} {Secret} to authenticate. Use /help for help.");
             
             UdpChatClient udpChatClient = new UdpChatClient(client, server, port, data, repeat);
+            Console.CancelKeyPress += udpChatClient.EndProgram;
             udpChatClient.MainBegin();
         }
         

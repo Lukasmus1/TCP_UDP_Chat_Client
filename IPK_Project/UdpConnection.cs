@@ -28,8 +28,7 @@ public class UdpConnection
     {
         try
         {
-            Client  = new UdpClient(Server, Port);
-            Console.WriteLine("Connected");
+            Client  = new UdpClient();
         }
         catch (Exception e)
         {
