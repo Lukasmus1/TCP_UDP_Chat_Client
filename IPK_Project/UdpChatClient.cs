@@ -5,14 +5,14 @@ using System.Text;
 
 namespace IPK_Project;
 
-public class UdpChatClient
+public class UdpChatClient : IClient
 {
     private readonly UdpClient _client;
     private StatesEnum _state;
     private Queue<string> _inputs = [];
-    private string _displayName;
-    private string _stringToSend;
-    private List<byte> _sendToServer;
+    private string _displayName = null!;
+    private string _stringToSend = null!;
+    private List<byte> _sendToServer = null!;
     private ushort _msgCounter;
     private readonly ushort _data;
     private readonly byte _repeat;
@@ -27,7 +27,10 @@ public class UdpChatClient
         _data = data;
         _repeat = repeat;
         _client = client;
-        _endPoint = new IPEndPoint(IPAddress.Parse(server), port);
+        
+        _endPoint = new IPEndPoint(Array.Find(
+            Dns.GetHostEntry(server).AddressList,
+            a => a.AddressFamily == AddressFamily.InterNetwork)!, port);
         _state = StatesEnum.Start;
 
         _msgCounter = 0;
@@ -37,7 +40,7 @@ public class UdpChatClient
     
     private void SendInput(List<byte> input)
     {
-        _client.Send(input.ToArray(), input.Count, _endPoint);
+        _client.Send(input.ToArray(), _endPoint);
     }
     
     private List<byte> ConvertToBytes(string input)
@@ -61,7 +64,6 @@ public class UdpChatClient
                 resList.Add([0x00]);
                 resList.Add(Encoding.ASCII.GetBytes(splitInput[5]));
                 resList.Add([0x00]);
-                _msgCounter++;
                 break;
             
             case "JOIN":
@@ -71,7 +73,6 @@ public class UdpChatClient
                 resList.Add([0x00]);
                 resList.Add(Encoding.ASCII.GetBytes(splitInput[3]));
                 resList.Add([0x00]);
-                _msgCounter++;
                 break;
                 
             case "MSG":
@@ -81,7 +82,6 @@ public class UdpChatClient
                 resList.Add([0x00]);
                 resList.Add(Encoding.ASCII.GetBytes(string.Join(" ", splitInput.Skip(4)).TrimEnd('\r', '\n')));
                 resList.Add([0x00]);
-                _msgCounter++;
                 break;
             
             case "ERR":
@@ -91,13 +91,11 @@ public class UdpChatClient
                 resList.Add([0x00]);
                 resList.Add(Encoding.ASCII.GetBytes(string.Join(" ", splitInput.Skip(4)).TrimEnd('\r', '\n')));
                 resList.Add([0x00]);
-                _msgCounter++;
                 break;
             
             case "BYE":
                 resList.Add([0xFF]);
                 resList.Add([(byte)(_msgCounter >> 8), (byte)(_msgCounter & 0xFF)]);
-                _msgCounter++;
                 break;
         }
 
@@ -106,6 +104,7 @@ public class UdpChatClient
             res.AddRange(item);
         }
 
+        _msgCounter++;
         return res;
     }
     private (string, byte[]) ConvertToString(byte[] input)
@@ -191,7 +190,7 @@ public class UdpChatClient
                 break;
             case 0xFE:
                 res = "ERR FROM ";
-                i = 2;
+                i = 3;
                 while (input[i] != 0x00)
                 {
                     res += Convert.ToChar(input[i]);
@@ -210,7 +209,9 @@ public class UdpChatClient
                 res = "BYE\r\n";
                 break;
             default:
-                return ("err", [0]);
+                Console.Error.WriteLine("ERR: Unknown response");
+                Task.Run(() => HandleOutput(ConvertToBytes(Patterns.GetErrMsg(_displayName, "Chybný vstup ze serveru")), _msgCounter - 1));
+                return ("errEnd", [0]);
         }
 
         return (res, input.Skip(1).Take(2).ToArray());
@@ -273,13 +274,17 @@ public class UdpChatClient
         byte[] counter = [(byte)(id >> 8), (byte)(id & 0xFF)];
         Stopwatch sw = new Stopwatch();
         int currTries = 0;
-        List<byte[]> clone;
+        List<byte[]> clone = new();
         
         SendInput(input);
         sw.Start();
         while (currTries < _repeat)
         {
-            clone = [.._confirms];
+            if (!clone.SequenceEqual(_confirms))
+            {
+                clone = [.._confirms];
+            }
+
             if (clone.Any(item => item.SequenceEqual(counter)))
             {
                 sw.Stop();
@@ -320,7 +325,7 @@ public class UdpChatClient
 
                     break;
                 case StatesEnum.Open:
-                    _stringToSend = statesBehaviour.Open(ref _inputs, ref _responsesStr, out _state, _displayName);
+                    _stringToSend = statesBehaviour.Open(ref _inputs, ref _responsesStr, out _state, ref _displayName);
 
                     break;
                 case StatesEnum.Err:
@@ -335,12 +340,17 @@ public class UdpChatClient
                 Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
                 break;
             }
-            
-            if (_stringToSend != "err")
+
+            if (_stringToSend == "err")
             {
-                _sendToServer = ConvertToBytes(_stringToSend);
-                Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
+                continue;
             }
+            else if (_stringToSend == "errEnd")
+            {
+                Environment.Exit(1);
+            }
+            _sendToServer = ConvertToBytes(_stringToSend);
+            Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
         }
     }
     

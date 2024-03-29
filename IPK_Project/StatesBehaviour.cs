@@ -18,29 +18,28 @@ public class StatesBehaviour
         switch (splitInput[0])
         {
             case "/auth":
-                if (splitInput.Length < 5 &&
-                    splitInput.Length > 3 &&
-                    splitInput[1].Length <= 20 && Regex.IsMatch(splitInput[1], "^[A-z0-9-]*$") && 
-                    splitInput[2].Length <= 20 && Regex.IsMatch(splitInput[2], "^[!-~]*$") &&
-                    splitInput[3].Length <= 128 && Regex.IsMatch(splitInput[3], "^[A-z0-9-]*$"))
+                if (splitInput.Length is < 5 and > 3 &&
+                    splitInput[1].Length <= 20 && Regex.IsMatch(splitInput[1], "^[A-z0-9-]{1,20}$") && 
+                    splitInput[2].Length <= 20 && Regex.IsMatch(splitInput[2], "^[!-~]{1,20}$") &&
+                    splitInput[3].Length <= 128 && Regex.IsMatch(splitInput[3], "^[A-z0-9-]{1,128}$"))
                 {
                     nextState = StatesEnum.Auth;
-                    return (Patterns.GetAuthMsg(splitInput[1], splitInput[2], splitInput[3]), splitInput[2]);
+                    return (Patterns.GetAuthMsg(splitInput[1], splitInput[3], splitInput[2]), splitInput[3]);
                 }
 
-                Console.WriteLine("Invalid input");
-                nextState = StatesEnum.Start;
-                return ("err", "err");
+                Console.Error.WriteLine("ERR: Invalid input");
+                nextState = StatesEnum.Err;
+                return ("errEnd", "err");
             
             case "/help":
                 Console.WriteLine(Patterns.HelpMsg);
                 nextState = StatesEnum.Start;
-                return ("err", "err");
+                return ("errEnd", "err");
             
             default:
-                Console.WriteLine("You need to authenticate!");
-                nextState = StatesEnum.Start;
-                return ("err", "err");
+                Console.Error.WriteLine("ERR: Invalid input");
+                nextState = StatesEnum.Err;
+                return ("errEnd", "err");
         }
     }
     public string Auth(ref Queue<string> responses, out StatesEnum nextState)
@@ -53,13 +52,7 @@ public class StatesBehaviour
 
         string input = responses.Dequeue();
         
-        if (input == "/help")
-        {
-            Console.WriteLine(Patterns.HelpMsg);
-            nextState = StatesEnum.Auth;
-            return "err";
-        }
-        else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyOk))
+        if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyOk))
         {
             nextState = StatesEnum.Open;
             Console.Error.WriteLine("Success: " + string.Join(" ", input.Split(" ").Skip(3)));
@@ -81,7 +74,7 @@ public class StatesBehaviour
         nextState = StatesEnum.End;
         return Patterns.ByePattern;
     }
-    public string Open(ref Queue<string?> inputs, ref Queue<string> responses, out StatesEnum nextState, string displayName)
+    public string Open(ref Queue<string?> inputs, ref Queue<string> responses, out StatesEnum nextState, ref string displayName)
     {
         string sendToServer = "err";
         nextState = StatesEnum.Open;
@@ -91,6 +84,12 @@ public class StatesBehaviour
             string[] input = inputs.Dequeue()!.Split(" ");
             switch (input[0])
             {
+                case "/rename":
+                    if (input.Length == 2 && input[1].Length <= 20 && Regex.IsMatch(input[1], @"^[A-z0-9-]*$"))
+                    {
+                        displayName = input[1];
+                    }
+                    break;
                 case "/join":
                     if (input.Length == 2 && input[1].Length <= 20 && Regex.IsMatch(input[1], @"^[A-z0-9-]*$"))
                     {
@@ -102,14 +101,18 @@ public class StatesBehaviour
                     Console.WriteLine(Patterns.HelpMsg);
                     nextState = StatesEnum.Start;
                     break;
+                case "/auth":
+                    Console.Error.WriteLine("ERR: Already authenticated");
+                    nextState = StatesEnum.Err;
+                    return "err";
                 default:
-                    if (Regex.IsMatch(input[0], @"^[ -~]*$"))
+                    if (Regex.IsMatch(input[0], "^[ -~]*$"))
                     {
                         return "MSG FROM " + displayName + " IS " + string.Join(" ", input) + "\r\n";
                     }
                     
-                    Console.WriteLine("Invalid input");
-                    break;
+                    Console.Error.WriteLine("ERR: Invalid input");
+                    return "err";
             }
         }
 
@@ -119,11 +122,11 @@ public class StatesBehaviour
             string[] responseSplit = input.Split(" ");
             if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyOk))
             {
-                Console.Write("Success: " + string.Join(" ", responseSplit.Skip(3)));
+                Console.Error.Write("Success: " + string.Join(" ", responseSplit.Skip(3)));
             }
             else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyNok))
             {
-                Console.Write("Failure: " + string.Join(" ", responseSplit.Skip(3)));
+                Console.Error.Write("Failure: " + string.Join(" ", responseSplit.Skip(3)));
             }
             else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyMsg))
             {
@@ -131,7 +134,7 @@ public class StatesBehaviour
             }
             else if (Regex.IsMatch(input.ToUpper(), Patterns.ReplyErrPattern))
             {
-                Console.WriteLine("ERR FROM " + responseSplit[2] + ": " + string.Join(" ", responseSplit.Skip(4)));
+                Console.Error.WriteLine("ERR FROM " + responseSplit[2] + ": " + string.Join(" ", responseSplit.Skip(4)));
                 nextState = StatesEnum.End;
                 return Patterns.ByePattern;
             }

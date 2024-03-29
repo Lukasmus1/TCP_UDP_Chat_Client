@@ -38,32 +38,30 @@ class MainClass
 
         if (connectionType == null || server == null || connectionType.ToLower() is not ("tcp" or "udp"))
         {
-            Console.WriteLine("Missing required arguments. Use -h for help.");
+            Console.Error.WriteLine("ERR: Missing required arguments. Use -h for help.");
             Environment.Exit(1);
         }
         
+        IClient chatClient;
         if (connectionType == "tcp")
         {
             TcpConnection client = new TcpConnection(server!, port);
             if (!client.Connect())
             {
-                Console.WriteLine("Failed to connect to the server.");
+                Console.Error.WriteLine("ERR: Failed to connect to the server.");
                 Environment.Exit(1);
             }
-            TcpChatClient tcpChatClient = new TcpChatClient(client.Stream);
-            Console.CancelKeyPress += tcpChatClient.EndProgram;
-            tcpChatClient.MainBegin();
+            chatClient = new TcpChatClient(client.Stream);
         }
         else
         {
             UdpClient client = new UdpClient(0);
-            Console.WriteLine("Use /auth {Username} {DisplayName} {Secret} to authenticate. Use /help for help.");
-            
-            UdpChatClient udpChatClient = new UdpChatClient(client, server, port, data, repeat);
-            Console.CancelKeyPress += udpChatClient.EndProgram;
-            udpChatClient.MainBegin();
+            chatClient = new UdpChatClient(client, server, port, data, repeat);
         }
         
+        //Console.WriteLine("Use /auth {Username} {DisplayName} {Secret} to authenticate. Use /help for help.");
+        Console.CancelKeyPress += chatClient.EndProgram;
+        chatClient.MainBegin();
         
     }
 }

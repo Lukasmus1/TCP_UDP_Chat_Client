@@ -16,7 +16,6 @@ public class TcpConnection(string server, ushort port)
         {
             _client  = new TcpClient(Server, Port);
             Stream = _client.GetStream();
-            Console.WriteLine("Connected");
         }
         catch (Exception e)
         {

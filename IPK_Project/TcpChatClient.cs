@@ -3,7 +3,7 @@ using System.Text;
 
 namespace IPK_Project;
 
-public class TcpChatClient
+public class TcpChatClient : IClient
 {
     private readonly NetworkStream _stream;
     private StatesEnum _state;
@@ -63,7 +63,6 @@ public class TcpChatClient
         StatesBehaviour statesBehaviour = new StatesBehaviour();
         while (_state != StatesEnum.End)
         {
-            Task.Delay(50).Wait();
             string sendToServer = "";
             switch (_state)
             {
@@ -74,7 +73,7 @@ public class TcpChatClient
                     sendToServer = statesBehaviour.Auth(ref _responses, out _state);
                     break;
                 case StatesEnum.Open:
-                    sendToServer = statesBehaviour.Open(ref _inputs, ref _responses, out _state, _displayName);
+                    sendToServer = statesBehaviour.Open(ref _inputs, ref _responses, out _state, ref _displayName);
                     break;
                 case StatesEnum.Err:
                     sendToServer = statesBehaviour.Err(out _state);
