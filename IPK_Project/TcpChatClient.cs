@@ -47,10 +47,19 @@ public class TcpChatClient : IClient
     {
         while (_state != StatesEnum.End)
         {
+            try
+            {
+                Console.In.Peek();
+            }
+            catch (ObjectDisposedException)
+            {
+                _inputs.Enqueue(null);
+                break;
+            }
+
             if (Console.In.Peek() == -1 && _inputs.Count == 0)
             {
-                _asyncEnd = true;
-                _state = StatesEnum.End;
+                _inputs.Enqueue(null);
                 break;
             }
             string? input = await Console.In.ReadLineAsync();
@@ -80,7 +89,7 @@ public class TcpChatClient : IClient
                     break;
             }
 
-            if (_state == StatesEnum.End || _asyncEnd)
+            if (_state == StatesEnum.End || _asyncEnd || sendToServer == "errEnd")
             {
                 SendInput(Patterns.ByePattern);
                 break;

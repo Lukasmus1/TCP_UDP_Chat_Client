@@ -50,11 +50,7 @@ public class UdpChatClient : IClient
         input = input.Trim('\r', '\n');
         string[] splitInput = input.Split(" ");
         switch (splitInput[0].ToUpper())
-        {
-            case "":
-
-                break;
-            
+        {    
             case "AUTH":
                 resList.Add([0x02]);
                 resList.Add([(byte)(_msgCounter >> 8), (byte)(_msgCounter & 0xFF)]);

@@ -81,6 +81,10 @@ public class StatesBehaviour
 
         if (inputs.Count > 0)
         {
+            if(string.IsNullOrEmpty(inputs.Peek()))
+            {
+                return "errEnd";
+            }
             string[] input = inputs.Dequeue()!.Split(" ");
             switch (input[0])
             {
@@ -112,7 +116,7 @@ public class StatesBehaviour
                     }
                     
                     Console.Error.WriteLine("ERR: Invalid input");
-                    return "err";
+                    return "errEnd";
             }
         }
 
@@ -145,9 +149,9 @@ public class StatesBehaviour
             }
             else
             {
-                Console.WriteLine("ERR: Unknown response");
+                Console.Error.WriteLine("ERR: Server sent an error message");
                 nextState = StatesEnum.Err;
-                return Patterns.GetErrMsg(displayName, "Chybicka se vbloudila");
+                return Patterns.GetErrMsg(displayName, "Server poslal error");
             }
         }
         
