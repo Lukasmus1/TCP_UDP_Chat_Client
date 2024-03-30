@@ -34,8 +34,6 @@ public class UdpChatClient : IClient
         _state = StatesEnum.Start;
 
         _msgCounter = 0;
-        Task.Run(GetInputAsync);
-        Task.Run(GetResponseAsync);
     }
     
     private void SendInput(List<byte> input)
@@ -307,6 +305,8 @@ public class UdpChatClient : IClient
     
     public void MainBegin()
     {
+        Task.Run(GetInputAsync);
+        Task.Run(GetResponseAsync);
         StatesBehaviour statesBehaviour = new StatesBehaviour();
         while (_state != StatesEnum.End)
         {
@@ -314,19 +314,15 @@ public class UdpChatClient : IClient
             {
                 case StatesEnum.Start:
                     (_stringToSend, _displayName) = statesBehaviour.Start(out _state, ref _inputs);
-
                     break;
                 case StatesEnum.Auth:
                     _stringToSend = statesBehaviour.Auth(ref _responsesStr, out _state);
-
                     break;
                 case StatesEnum.Open:
                     _stringToSend = statesBehaviour.Open(ref _inputs, ref _responsesStr, out _state, ref _displayName);
-
                     break;
                 case StatesEnum.Err:
                     _stringToSend = statesBehaviour.Err(out _state);
-
                     break;
             }
             

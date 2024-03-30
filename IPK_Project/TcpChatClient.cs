@@ -16,9 +16,6 @@ public class TcpChatClient : IClient
     {
         _stream = stream;
         _state = StatesEnum.Start;
-        
-        Task.Run(GetResponseAsync);
-        Task.Run(GetInputAsync);
     }
 
     private void SendInput(string input)
@@ -69,6 +66,8 @@ public class TcpChatClient : IClient
 
     public void MainBegin()
     {
+        Task.Run(GetResponseAsync);
+        Task.Run(GetInputAsync);
         StatesBehaviour statesBehaviour = new StatesBehaviour();
         while (_state != StatesEnum.End)
         {

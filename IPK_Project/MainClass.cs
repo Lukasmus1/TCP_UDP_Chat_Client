@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using CommandLine;
 
 namespace IPK_Project;
@@ -45,13 +44,17 @@ class MainClass
         IClient chatClient;
         if (connectionType == "tcp")
         {
-            TcpConnection client = new TcpConnection(server!, port);
-            if (!client.Connect())
+            TcpClient? client = null;
+            try
             {
-                Console.Error.WriteLine("ERR: Failed to connect to the server.");
+                client  = new TcpClient(server, port);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("ERR: Connection failed.");
                 Environment.Exit(1);
             }
-            chatClient = new TcpChatClient(client.Stream);
+            chatClient = new TcpChatClient(client.GetStream());
         }
         else
         {

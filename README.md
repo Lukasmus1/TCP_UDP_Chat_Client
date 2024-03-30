@@ -1,0 +1,84 @@
+# Dokumentace k IPK projektu "Klient k chatovacímu serveru"
+### Autor: Lukáš Píšek (xpisek02)
+## Obsah <a name="obsah"></a>
+1. [Obsah](#obsah)
+2. [Úvod](#uvod)
+3. [Implementace](#impl)
+3.1 [Použité nástroje](#impl1)
+3.2 [Začátek programu](#impl2)
+3.3 [Funkcionalita](#impl3)
+3.3.1 [Společná](#impl3-1)
+3.3.2 [TCP Protokol](#impl3-2)
+3.3.3 [UDP Protokol](#impl3-3)
+4. [Testování](#test)
+4.1 [TCP](#test1)
+4.2 [UDP](#test2)
+5. [Zdroje](#zdr)
+6. [Závěr](#end)
+
+## Úvod <a name="uvod"></a>
+Cílem řešeného projektu bylo vytvořit konzolovou aplikaci, která bude zprostředkovávat komunikaci mezi uživatelem a serverem za pomocí `IPK24-CHAT` protokolu. Klient podporuje připojení pomocí protokolů TCP a UDP s potvrzováním příchodu zpráv. Veškeré zprávy a důležité informace o stavu serveru / klienta se vypisují na `stdout`. Uživatel zadává příkazy / posílá zprávy psaním do příkazové řádky (`stdin`). 
+
+## Implementace <a name="impl"></a>
+### 1. Použité nástroje <a name="impl1"></a>
+Na vypracování tohoto projektu jsem použil následující nástroje:
+-	Operační systém – Windows pro celkový vývoj a částečně [WSL](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (Ubuntu) pro testování
+-	Programovací jazyk – C#
+-	IDE – [Rider](https://www.jetbrains.com/rider/) pro vývoj na Windows a [VSCode](https://code.visualstudio.com) pro vývoj na Linux.
+-   Verzovací systém – Git
+-	Jako pomoc při programování a pro obecné otázky – Github Copilot
+### 2. Začátek programu (Metoda `Main()`) <a name="impl2"></a>
+Za pomocí knihovny `CommandLine` a mnou vytvořené knihovny `ArgParserOptions` se jako první věc zpracujou argumenty programu zadané uživatelem. 
+Následně se pomocí knihovny `System.Net.Sockets` vytvoří nová instance `TcpClient` nebo `UdpClient` třídy, kde TCP verze se také okamžitě pokusí připojit k danému serveru na daném portu a abstraktně vyřeší i proces s názvem "[3-Way Handshake](https://www.geeksforgeeks.org/tcp-3-way-handshake-process/)."
+Po těchto procesech se následně zavolá metoda `MainBegin()`, která má vlastní implementaci podle zvoleného protokolu pro připojení.
+### 3. Funkcionalita <a name="impl3"></a>
+#### Společná <a name="impl3-1"></a>
+Celá funkcionalita je založená na spuštění dvou asynchronních metod a jedné "hlavní" metody.
+
+Jako první věc se spustí 2 asnychronní metody `GetInputAsync` a `GetResponseAsync`, které neustále běží na pozadí v cyklu a vykonávají:
+- `GetInputAsync` neustále po řádcích čte text zadaný do `stdin`, který následně ukládá do atributu typu `Queue<string> _inputs`.
+- `GetResponseAsync` neustále čte příchozí zprávy ze serveru a ukládá je do atributu typu `Queue<string> _responses` u TCP a `Queue<string> _responsesStr`u UDP.
+
+Stavový automat je implementován pomocí speciální třídy `enum`, která v sobě uchovává názvy stavů. V hlavní metodě se potom pomocí cyklu neustále kontroluje v jakém stavu se program momentálně nachází a následně se volají metody se stejným názvem jako mají stavy. Tyto metody jsou uloženy ve třídě `StatesBehaviour` a chovají se jako hlavní funkcionalita daného stavu.
+Ukončení programu přes klávesovou zkratku je řešena přes `event` s názvem `CancelKeyPress`, který je implementován třídou `Console`. Tento `event` se následně přidává mnou vytvořené metodě `EndProgram`, která ještě před ukončením programu pošle serveru zprávu `BYE`. 
+
+#### TCP Protokol <a name="impl3-2"></a>
+Implementace tohoto protokolu je napsána ve třídě s názvem `TcpChatClient`, která implementuje `interface` s názvem `IClient` pro jednoduchost volání hlavní třídní metody ve hlavní třídě. 
+Jelikož byla TCP verze psána jako první, tak se v mnoha ohledech chová jako taková "předloha," kterou poté implementuje UDP verze. 
+Metoda `SendInput`, která posílá zadané zprávy na server je zde implementována tak, aby pro jednoduchost jako atribut měla `string`, jelikož TCP posílá zprávy přes třídu `NetworkStream`.
+Na konci programu se musí uzavřít daný `NetworkStream` za pomocí metody `Close()`.
+
+#### UDP Protokol <a name="impl3-3"></a>
+UDP protokol je dle implementace udělán aby byl "[connectionless](https://en.wikipedia.org/wiki/User_Datagram_Protocol)," to znamená, že se nepřipojuje na žádný server. Proto namísto připojení jako u TCP varianty musel být vytvořen `IPEndPoint` s adresou a portem serveru, na který se budou dané zprávy posílat.
+Pro komunikaci mezi klientem a serverem se využívá protkol `IPK24-CHAT`, jehož zprávy vypadají následovně: 
+```
++----------------+------------+------------+--------------+
+|  Local Medium  |     IP     |     UDP    |  IPK24-CHAT  |
++----------------+------------+------------+--------------+
+```
+Pro znovuvyužití metod ze třídy `StatesBehaviour`, které očekávají argumenty typu, který se používá při TCP variantě byly vytvořeny 2 pomocné metody:
+- `ConvertToBytes` překonvertuje vstup typu `string` na `List<byte>`, který se následně pošle na server.
+- `ConvertToString` překonvertuje vstup typu `byte[]` na `string`, který má stejné formátování jako vstupy z TCP varianty.
+
+Za pomocí těchto 2 metod můžu znovupoužít stejné metody pro zpracování stavů jako u TCP. 
+Kvůli zpracovávání potvrzení o přijetí zpráv je zde také metoda s názvem `HandleOutput`, která se volá namísto metody `SendIpnut`. Tato metoda po odeslání zprávy na server asynchronně čeká na zpáteční potvrzující zprávu tak, že pomocí knihovny `System.Diagnostics` vytvoří novou instanci třídy `Stopwatch` a pomocí té následně počítá čas. Pokud tento čas překročí uřivatelem zadanout hodnotu pro časový limit pro odpověď. Inkrementuje se proměnná `tries` a pokud tato proměnná překročí uživatelem zadanou hodnotu pro maximální počet pokusů, program vyšle na server zprávu `BYE` a ukončí se.
+Samotná třída `UdpClient` používá pro posílání zpráv metodu `Send`. Z tohoto důvodu metoda `SendInput` má jaku typ atributu `List<byte>`.
+
+### 4. Testování programu <a name="test"></a>
+#### TCP <a name="test1"></a>
+Testování TCP ze začátku probíhalo pomocí nástroje `netcat`. Na mém WSL jsem spustil příkaz `sudo nc -lkp 1000`, kde jsem naslouchal na zadaný port (pro testovací účely jsem zvolil čistě náhodný port 1000, který v ten moment žádný jiný program nevyužíval). Toto mi umožňovalo připojit se na `localhost` a poté si mimo jiné posílat jedoduché odpovědi.
+Později byla nutnost testovat pokročilejší chování. K tomuto účelu byl využit jednoduchý TCP server.
+Bylo testováno odesílání a poté přijímaní odpovídajících zpráv. Celá tato komunikace byla následně monitorována aplikací [Wireshark](https://www.wireshark.org) za pomocí přiloženého skriptu `ipk24-chat.lua`.
+#### UDP <a name="test2"></a>
+Testování UDP probíhalo obdobně jako TCP, jelikož většina metod je sdílená. 
+Pouze byla nutnost otestovat časomíru pro ukončení programu při neobdržření odpovědi do daného času. Toto bylo otestováno za pomocí jednoduchého skriptu, který posíal tyto potvrzující zprávy s nastavitelným zpožděním.
+
+### 5. Zdroje <a name="zdr"></a>
+
+
+### 6. Závěr <a name="end"></a>
+Tento projekt mě naučil spoustu nových věcí. Naučil jsem se co jsou protokoly TCP a UDP, jak se liší a jak s nimi pracovat. 
+Naučil jsem se posílat zprávy na nějaký server a následně tyto zprávy zpracovávat.
+Také jsem poprvé aktivně využil a naučil se pracovat se softwarem Wireshark pro kontrolu provozu dat na mé síti.
+Dokázal jsem následovat zadání a naprorgamovat rozsáhlý program s částečným využitím OOP.
+Obohatil jsem si znalosti co se týče vícevláknového programování v C#.
