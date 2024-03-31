@@ -64,7 +64,7 @@ Za pomocí těchto 2 metod můžu znovupoužít stejné metody pro zpracování 
 Kvůli zpracovávání potvrzení o přijetí zpráv je zde také metoda s názvem `HandleOutput`, která se volá namísto metody `SendIpnut`. Tato metoda po odeslání zprávy na server asynchronně čeká na zpáteční potvrzující zprávu tak, že pomocí knihovny `System.Diagnostics` vytvoří novou instanci třídy `Stopwatch` a pomocí té následně počítá čas. Pokud tento čas překročí uřivatelem zadanout hodnotu pro časový limit pro odpověď. Inkrementuje se proměnná `tries` a pokud tato proměnná překročí uživatelem zadanou hodnotu pro maximální počet pokusů, program vyšle na server zprávu `BYE` a ukončí se.
 Samotná třída `UdpClient` používá pro posílání zpráv metodu `Send`. Z tohoto důvodu metoda `SendInput` má jaku typ atributu `List<byte>`.
 
-### Testování programu <a name="test"></a>
+## Testování programu <a name="test"></a>
 #### 1. TCP <a name="test1"></a>
 Testování TCP ze začátku probíhalo pomocí nástroje `netcat`. Na mém WSL jsem spustil příkaz `sudo nc -lkp 1000`, kde jsem naslouchal na zadaný port (pro testovací účely jsem zvolil čistě náhodný port 1000, který v ten moment žádný jiný program nevyužíval). Toto mi umožňovalo připojit se na `localhost` a poté si mimo jiné posílat jedoduché odpovědi.
 Později byla nutnost testovat pokročilejší chování. K tomuto účelu byl využit jednoduchý TCP server.
@@ -73,12 +73,12 @@ Bylo testováno odesílání a poté přijímaní odpovídajících zpráv. Cel�
 Testování UDP probíhalo obdobně jako TCP, jelikož většina metod je sdílená. 
 Pouze byla nutnost otestovat časomíru pro ukončení programu při neobdržření odpovědi do daného času. Toto bylo otestováno za pomocí jednoduchého skriptu, který posíal tyto potvrzující zprávy s nastavitelným zpožděním.
 
-### Makefile používání <a name="make"></a>
+## Makefile používání <a name="make"></a>
 - `make build` Překlad programu a uložení spustitelného souboru do složky `publish`
 - `make run ARGS="arg1 arg2..."` Spuštení programu s argumenty `arg1` `arg2`...
 - `make clean` Vyčištění adresáře + smazání složky `publish` 
 
-### Závěr <a name="end"></a>
+## Závěr <a name="end"></a>
 Tento projekt mě naučil spoustu nových věcí. Naučil jsem se co jsou protokoly TCP a UDP, jak se liší a jak s nimi pracovat. 
 Naučil jsem se posílat zprávy na server a následně tyto zprávy zpracovávat.
 Také jsem poprvé aktivně využil a naučil se pracovat se softwarem Wireshark pro kontrolu provozu dat na mé síti.
