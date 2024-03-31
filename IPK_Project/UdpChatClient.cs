@@ -271,7 +271,7 @@ public class UdpChatClient : IClient
     }
     
     //Method for waiting for the confirmation from the server
-    private async void HandleOutput(List<byte> input, int id)
+    private void HandleOutput(List<byte> input, int id)
     {
         byte[] counter = [(byte)(id >> 8), (byte)(id & 0xFF)];
         Stopwatch sw = new();
