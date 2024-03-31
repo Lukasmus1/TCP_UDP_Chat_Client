@@ -1,5 +1,6 @@
 ﻿namespace IPK_Project;
 
+//Patterns for regex matching and message formatting
 public static class Patterns
 {
     public const string ReplyOk = "^REPLY OK IS ([ -~]*)\r\n$";

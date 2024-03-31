@@ -9,7 +9,7 @@ public class UdpChatClient : IClient
 {
     private readonly UdpClient _client;
     private StatesEnum _state;
-    private Queue<string> _inputs = [];
+    private Queue<string?> _inputs = [];
     private string _displayName = null!;
     private string _stringToSend = null!;
     private List<byte> _sendToServer = null!;
@@ -28,6 +28,7 @@ public class UdpChatClient : IClient
         _repeat = repeat;
         _client = client;
         
+        //Get the IP address of the server from DNS 
         _endPoint = new IPEndPoint(Array.Find(
             Dns.GetHostEntry(server).AddressList,
             a => a.AddressFamily == AddressFamily.InterNetwork)!, port);
@@ -36,11 +37,13 @@ public class UdpChatClient : IClient
         _msgCounter = 0;
     }
     
+    //Method for sending input to the server
     private void SendInput(List<byte> input)
     {
         _client.Send(input.ToArray(), _endPoint);
     }
     
+    //Method for converting the input string to bytes according to the protocol
     private List<byte> ConvertToBytes(string input)
     {
         List<byte[]> resList = [];
@@ -101,6 +104,8 @@ public class UdpChatClient : IClient
         _msgCounter++;
         return res;
     }
+    
+    //Method for converting the input bytes to string according to the TCP protocol so I can reuse the same methods
     private (string, byte[]) ConvertToString(byte[] input)
     {
         string res;
@@ -212,6 +217,7 @@ public class UdpChatClient : IClient
     }
     
     
+    //Async method for getting input from the user and putting it into the queue
     private async void GetInputAsync()
     {
         while (_state != StatesEnum.End)
@@ -227,6 +233,7 @@ public class UdpChatClient : IClient
         }
     }
     
+    //Async method for getting response from the server
     private async void GetResponseAsync()
     {
         UdpReceiveResult res;
@@ -263,27 +270,34 @@ public class UdpChatClient : IClient
         }
     }
     
+    //Method for waiting for the confirmation from the server
     private async void HandleOutput(List<byte> input, int id)
     {
         byte[] counter = [(byte)(id >> 8), (byte)(id & 0xFF)];
-        Stopwatch sw = new Stopwatch();
+        Stopwatch sw = new();
         int currTries = 0;
-        List<byte[]> clone = new();
+        List<byte[]> clone = [];
         
+        //Works by starting a stopwatch and checking its elapsed time
         SendInput(input);
         sw.Start();
         while (currTries < _repeat)
         {
+            //Creating a clone because the list might be modified while iterating
+            //Since the clone is created inside a loop, I need to add this check so I don't create a new clone every time and waste memory
             if (!clone.SequenceEqual(_confirms))
             {
                 clone = [.._confirms];
             }
-
+        
+            //If the confirms list contains the message ID, the message was confirmed
             if (clone.Any(item => item.SequenceEqual(counter)))
             {
                 sw.Stop();
                 break;
             }
+            
+            //If the time elapsed, resend the message
             if (sw.ElapsedMilliseconds >= _data)
             {
                 SendInput(input);
@@ -292,6 +306,7 @@ public class UdpChatClient : IClient
             }
         }
         
+        //If the message wasn't confirmed after the maximum number of tries, set the state to error
         sw.Stop();
         if (currTries > _repeat)
         {
@@ -299,7 +314,8 @@ public class UdpChatClient : IClient
             _asyncEnd = true;
             return;
         }
-
+        
+        //If the message was confirmed, remove the message ID from the list
         _confirms.Remove(counter);
     }
     
@@ -307,25 +323,26 @@ public class UdpChatClient : IClient
     {
         Task.Run(GetInputAsync);
         Task.Run(GetResponseAsync);
-        StatesBehaviour statesBehaviour = new StatesBehaviour();
         while (_state != StatesEnum.End)
         {
+            //FSM
             switch (_state)
             {
                 case StatesEnum.Start:
-                    (_stringToSend, _displayName) = statesBehaviour.Start(out _state, ref _inputs);
+                    (_stringToSend, _displayName) = StatesBehaviour.Start(out _state, ref _inputs);
                     break;
                 case StatesEnum.Auth:
-                    _stringToSend = statesBehaviour.Auth(ref _responsesStr, out _state);
+                    _stringToSend = StatesBehaviour.Auth(ref _responsesStr, out _state);
                     break;
                 case StatesEnum.Open:
-                    _stringToSend = statesBehaviour.Open(ref _inputs, ref _responsesStr, out _state, ref _displayName);
+                    _stringToSend = StatesBehaviour.Open(ref _inputs, ref _responsesStr, out _state, ref _displayName);
                     break;
                 case StatesEnum.Err:
-                    _stringToSend = statesBehaviour.Err(out _state);
+                    _stringToSend = StatesBehaviour.Err(out _state);
                     break;
             }
-            
+                
+            //Helper for "asynchronous" end
             if (_state == StatesEnum.End || _asyncEnd)
             {
                 _sendToServer = ConvertToBytes(Patterns.ByePattern);
@@ -341,11 +358,14 @@ public class UdpChatClient : IClient
             {
                 Environment.Exit(1);
             }
+            
+            //Send the input to the server
             _sendToServer = ConvertToBytes(_stringToSend);
             Task.Run(() => HandleOutput(_sendToServer, _msgCounter - 1));
         }
     }
     
+    //Method for handling the Ctrl+C event
     public void EndProgram(object? sender, ConsoleCancelEventArgs e)
     {
         if (_state != StatesEnum.Start)

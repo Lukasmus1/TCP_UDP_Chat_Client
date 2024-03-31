@@ -7,13 +7,15 @@ class MainClass
 {
     static void Main(string[] args)
     {
+        //Declaring variables with default values
         string? connectionType = null;
         string? server = null;
         ushort port = 4567;
         ushort data = 250;
         byte repeat = 3;
 
-        var parser = new Parser(config => config.HelpWriter = TextWriter.Null);
+        //Arg parser
+        Parser parser = new Parser(config => config.HelpWriter = TextWriter.Null);
         parser.ParseArguments<ArgParserOptions>(args)
             .WithParsed(o =>
             {
@@ -41,7 +43,10 @@ class MainClass
             Environment.Exit(1);
         }
         
+        //IClient has the MainBegin method and EndProgram method
         IClient chatClient;
+        
+        //Creating the client based on the connection type
         if (connectionType == "tcp")
         {
             TcpClient? client = null;
@@ -49,7 +54,7 @@ class MainClass
             {
                 client  = new TcpClient(server, port);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 Console.WriteLine("ERR: Connection failed.");
                 Environment.Exit(1);
@@ -62,8 +67,10 @@ class MainClass
             chatClient = new UdpChatClient(client, server, port, data, repeat);
         }
         
-        //Console.WriteLine("Use /auth {Username} {DisplayName} {Secret} to authenticate. Use /help for help.");
+        //End program when Ctrl+C is pressed
         Console.CancelKeyPress += chatClient.EndProgram;
+        
+        //Start the client
         chatClient.MainBegin();
         
     }

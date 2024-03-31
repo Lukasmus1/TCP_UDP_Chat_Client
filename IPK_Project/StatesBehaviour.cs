@@ -2,9 +2,12 @@
 
 namespace IPK_Project;
 
-public class StatesBehaviour
+//FSM states behaviour
+public static class StatesBehaviour
 {
-    public (string, string) Start(out StatesEnum nextState, ref Queue<string?> inputs)
+    //Every method here checks for what it should do based on the current state and the input it gets
+    //It returns messages according to the TCP format
+    public static (string, string) Start(out StatesEnum nextState, ref Queue<string?> inputs)
     {
         if(inputs.Count < 1)
         {
@@ -42,7 +45,7 @@ public class StatesBehaviour
                 return ("errEnd", "err");
         }
     }
-    public string Auth(ref Queue<string> responses, out StatesEnum nextState)
+    public static string Auth(ref Queue<string> responses, out StatesEnum nextState)
     {
         if (responses.Count < 1)
         {
@@ -74,7 +77,7 @@ public class StatesBehaviour
         nextState = StatesEnum.End;
         return Patterns.ByePattern;
     }
-    public string Open(ref Queue<string?> inputs, ref Queue<string> responses, out StatesEnum nextState, ref string displayName)
+    public static string Open(ref Queue<string?> inputs, ref Queue<string> responses, out StatesEnum nextState, ref string displayName)
     {
         string sendToServer = "err";
         nextState = StatesEnum.Open;
@@ -158,7 +161,7 @@ public class StatesBehaviour
         nextState = StatesEnum.Open;
         return sendToServer;
     }
-    public string Err(out StatesEnum nextState)
+    public static string Err(out StatesEnum nextState)
     {
         nextState = StatesEnum.End;
         return Patterns.ByePattern;

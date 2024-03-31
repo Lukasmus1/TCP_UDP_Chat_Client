@@ -3,47 +3,44 @@ using System.Text;
 
 namespace IPK_Project;
 
-public class TcpChatClient : IClient
+public class TcpChatClient(NetworkStream stream) : IClient
 {
-    private readonly NetworkStream _stream;
-    private StatesEnum _state;
+    private StatesEnum _state = StatesEnum.Start;
     private bool _asyncEnd;
     private Queue<string?> _inputs = [];
     private Queue<string> _responses = [];
-    private string _displayName;
-
-    public TcpChatClient(NetworkStream stream)
-    {
-        _stream = stream;
-        _state = StatesEnum.Start;
-    }
-
+    private string _displayName = "";
+    
+    //Method for sending input to the server
     private void SendInput(string input)
     {
         byte[] buffer = Encoding.ASCII.GetBytes(input);
-        _stream.Write(buffer, 0, buffer.Length);
+        stream.Write(buffer, 0, buffer.Length);
     }
 
+    //Async method for getting responses from the server and putting them into the queue
     private async Task GetResponseAsync()
     {
         byte[] responseBuffer = new byte[1400];
         while (_state != StatesEnum.End)
         {
-            int bytesRead = await _stream.ReadAsync(responseBuffer, 0, responseBuffer.Length);
+            int bytesRead = await stream.ReadAsync(responseBuffer);
             string response = Encoding.UTF8.GetString(responseBuffer, 0, bytesRead);
             string[] responseArr = response.Split("\r\n");
-            foreach (var res in responseArr.Where(res => !string.IsNullOrWhiteSpace(res)))
+            foreach (string res in responseArr.Where(res => !string.IsNullOrWhiteSpace(res)))
             {
-                var resEnq = res + "\r\n";
+                string resEnq = res + "\r\n";
                 _responses.Enqueue(resEnq);
             }
         }
     }
 
+    //Async method for getting input from the user and putting it into the queue
     private async void GetInputAsync()
     {
         while (_state != StatesEnum.End)
         {
+            //Check if the input stream is closed
             try
             {
                 Console.In.Peek();
@@ -68,32 +65,35 @@ public class TcpChatClient : IClient
     {
         Task.Run(GetResponseAsync);
         Task.Run(GetInputAsync);
-        StatesBehaviour statesBehaviour = new StatesBehaviour();
         while (_state != StatesEnum.End)
         {
             string sendToServer = "";
+            
+            //FSM
             switch (_state)
             {
                 case StatesEnum.Start:
-                    (sendToServer, _displayName) = statesBehaviour.Start(out _state, ref _inputs);
+                    (sendToServer, _displayName) = StatesBehaviour.Start(out _state, ref _inputs);
                     break;
                 case StatesEnum.Auth:
-                    sendToServer = statesBehaviour.Auth(ref _responses, out _state);
+                    sendToServer = StatesBehaviour.Auth(ref _responses, out _state);
                     break;
                 case StatesEnum.Open:
-                    sendToServer = statesBehaviour.Open(ref _inputs, ref _responses, out _state, ref _displayName);
+                    sendToServer = StatesBehaviour.Open(ref _inputs, ref _responses, out _state, ref _displayName);
                     break;
                 case StatesEnum.Err:
-                    sendToServer = statesBehaviour.Err(out _state);
+                    sendToServer = StatesBehaviour.Err(out _state);
                     break;
             }
 
+            //Helper for "asynchronous" end
             if (_state == StatesEnum.End || _asyncEnd || sendToServer == "errEnd")
             {
                 SendInput(Patterns.ByePattern);
                 break;
             }
             
+            //The naming here is slightly decieving, it was just a random string I chose
             if (sendToServer == "err")
             {
                 continue;
@@ -102,9 +102,11 @@ public class TcpChatClient : IClient
             SendInput(sendToServer);
         }
         
-        _stream.Close();
+        //Before the program ends, close the stream
+        stream.Close();
     }
 
+    //Method for ending the program upon pressing Ctrl+C
     public void EndProgram(object? sender, ConsoleCancelEventArgs e)
     {
         if (_state != StatesEnum.Start)

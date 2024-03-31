@@ -4,6 +4,7 @@ namespace IPK_Project;
 
 public class ArgParserOptions
 {
+    //It is neccessary to assign the default values so the parser can work properly
     [Option('t')]
     public string? ConnectionType { get; set; }
 
