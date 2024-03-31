@@ -13,31 +13,31 @@
 - [Testování](#test)
     - [TCP](#test1)
     - [UDP](#test2)
-- [Zdroje](#zdr)
+- [Makefile](#make)
 - [Závěr](#end)
 
 ## Úvod <a name="uvod"></a>
-Cílem řešeného projektu bylo vytvořit konzolovou aplikaci, která bude zprostředkovávat komunikaci mezi uživatelem a serverem za pomocí `IPK24-CHAT` protokolu. Klient podporuje připojení pomocí protokolů TCP a UDP s potvrzováním příchodu zpráv. Veškeré zprávy a důležité informace o stavu serveru / klienta se vypisují na `stdout`. Uživatel zadává příkazy / posílá zprávy psaním do příkazové řádky (`stdin`). 
+Cílem řešeného projektu bylo vytvořit konzolovou aplikaci, která bude umožňovat komunikaci mezi uživatelem a serverem za pomocí `IPK24-CHAT` protokolu. Klient podporuje připojení pomocí protokolů TCP a UDP s potvrzováním příchodu zpráv. Veškeré zprávy a důležité informace o stavu serveru / klienta se vypisují na `stdout`. Uživatel zadává příkazy / posílá zprávy psaním do příkazové řádky (`stdin`). 
 
 ## Implementace <a name="impl"></a>
 ### 1. Použité nástroje <a name="impl1"></a>
 Na vypracování tohoto projektu jsem použil následující nástroje:
--	Operační systém – Windows pro celkový vývoj a částečně [WSL](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (Ubuntu) pro testování
+-	Operační systém – Windows 11 pro celkový vývoj a částečně [WSL](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (Ubuntu) pro testování
 -	Programovací jazyk – C#
 -	IDE – [Rider](https://www.jetbrains.com/rider/) pro vývoj na Windows a [VSCode](https://code.visualstudio.com) pro vývoj na Linux.
 -   Verzovací systém – Git
 -	Jako pomoc při programování a pro obecné otázky – Github Copilot
 ### Začátek programu (Metoda `Main()`) <a name="impl2"></a>
 Za pomocí knihovny `CommandLine` a mnou vytvořené knihovny `ArgParserOptions` se jako první věc zpracujou argumenty programu zadané uživatelem. 
-Následně se pomocí knihovny `System.Net.Sockets` vytvoří nová instance `TcpClient` nebo `UdpClient` třídy, kde TCP verze se také okamžitě pokusí připojit k danému serveru na daném portu a abstraktně vyřeší i proces s názvem "[3-Way Handshake](https://www.geeksforgeeks.org/tcp-3-way-handshake-process/)."
+Následně se pomocí knihovny `System.Net.Sockets` vytvoří nová instance `TcpClient` nebo `UdpClient` třídy, kde TCP verze se také okamžitě pokusí připojit k danému serveru na daném portu a provede tzv. [3-Way Handshake](https://www.geeksforgeeks.org/tcp-3-way-handshake-process/)."
 Po těchto procesech se následně zavolá metoda `MainBegin()`, která má vlastní implementaci podle zvoleného protokolu pro připojení.
 ### Funkcionalita <a name="impl3"></a>
 #### 1. Společná <a name="impl3-1"></a>
 Celá funkcionalita je založená na spuštění dvou asynchronních metod a jedné "hlavní" metody.
 
 Jako první věc se spustí 2 asnychronní metody `GetInputAsync` a `GetResponseAsync`, které neustále běží na pozadí v cyklu a vykonávají:
-- `GetInputAsync` neustále po řádcích čte text zadaný do `stdin`, který následně ukládá do atributu typu `Queue<string> _inputs`.
-- `GetResponseAsync` neustále čte příchozí zprávy ze serveru a ukládá je do atributu typu `Queue<string> _responses` u TCP a `Queue<string> _responsesStr`u UDP.
+- `GetInputAsync` neustále po řádcích čte text zadaný do `stdin`, který následně ukládá do atributu typu `Queue<string> _inputs` se kterým se potom synchronně pracuje.
+- `GetResponseAsync` neustále čte příchozí zprávy ze serveru a ukládá je do atributu typu `Queue<string> _responses` u TCP a `Queue<string> _responsesStr`u UDP se kterými se poté synchronně pracuje.
 
 Stavový automat je implementován pomocí speciální třídy `enum`, která v sobě uchovává názvy stavů. V hlavní metodě se potom pomocí cyklu neustále kontroluje v jakém stavu se program momentálně nachází a následně se volají metody se stejným názvem jako mají stavy. Tyto metody jsou uloženy ve třídě `StatesBehaviour` a chovají se jako hlavní funkcionalita daného stavu.
 Ukončení programu přes klávesovou zkratku je řešena přes `event` s názvem `CancelKeyPress`, který je implementován třídou `Console`. Tento `event` se následně přidává mnou vytvořené metodě `EndProgram`, která ještě před ukončením programu pošle serveru zprávu `BYE`. 
@@ -73,13 +73,14 @@ Bylo testováno odesílání a poté přijímaní odpovídajících zpráv. Cel�
 Testování UDP probíhalo obdobně jako TCP, jelikož většina metod je sdílená. 
 Pouze byla nutnost otestovat časomíru pro ukončení programu při neobdržření odpovědi do daného času. Toto bylo otestováno za pomocí jednoduchého skriptu, který posíal tyto potvrzující zprávy s nastavitelným zpožděním.
 
-### Zdroje <a name="zdr"></a>
-
-
+### Makefile používání <a name="make"></a>
+- `make build` Překlad programu a uložení spustitelného souboru do složky `publish`
+- `make run ARGS="arg1 arg2..."` Spuštení programu s argumenty `arg1` `arg2`...
+- `make clean` Vyčištění adresáře + smazání složky `publish` 
 
 ### Závěr <a name="end"></a>
 Tento projekt mě naučil spoustu nových věcí. Naučil jsem se co jsou protokoly TCP a UDP, jak se liší a jak s nimi pracovat. 
-Naučil jsem se posílat zprávy na nějaký server a následně tyto zprávy zpracovávat.
+Naučil jsem se posílat zprávy na server a následně tyto zprávy zpracovávat.
 Také jsem poprvé aktivně využil a naučil se pracovat se softwarem Wireshark pro kontrolu provozu dat na mé síti.
 Dokázal jsem následovat zadání a naprorgamovat rozsáhlý program s částečným využitím OOP.
 Obohatil jsem si znalosti co se týče vícevláknového programování v C#.
