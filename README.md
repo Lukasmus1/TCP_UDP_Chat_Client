@@ -74,9 +74,11 @@ Testování UDP probíhalo obdobně jako TCP, jelikož většina metod je sdíle
 Pouze byla nutnost otestovat časomíru pro ukončení programu při neobdržření odpovědi do daného času. Toto bylo otestováno za pomocí jednoduchého skriptu, který posíal tyto potvrzující zprávy s nastavitelným zpožděním.
 
 ## Makefile používání <a name="make"></a>
-- `make build` Překlad programu a uložení spustitelného souboru do složky `publish`
+- `make` Kompilace a vytvoření spustitelného souboru `ipk24chat-client`
+- `make build` Překlad programu 
+- `make publish` Kompilace a vytvoření spustitelného souboru `ipk24chat-client`
 - `make run ARGS="arg1 arg2..."` Spuštení programu s argumenty `arg1` `arg2`...
-- `make clean` Vyčištění adresáře + smazání složky `publish` 
+- `make clean` Vyčištění adresáře + smazání vytvořených složek a souborů 
 
 ## Závěr <a name="end"></a>
 Tento projekt mě naučil spoustu nových věcí. Naučil jsem se co jsou protokoly TCP a UDP, jak se liší a jak s nimi pracovat. 
