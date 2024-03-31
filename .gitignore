@@ -5,3 +5,7 @@ riderModule.iml
 /_ReSharper.Caches/
 /.idea/
 IPK_Project.sln.DotSettings
+IPK_Project.sln.DotSettings.user
+IPK_Project.sln
+.gitignore
+./idea
