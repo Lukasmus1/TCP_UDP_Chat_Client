@@ -6,7 +6,7 @@ build:
 	dotnet build
 
 publish:
-	dotnet publish -r linux-x64 -o ./ -p:PublishSingleFile=true --self-contained true
+	dotnet publish -o ./ -p:PublishSingleFile=true --self-contained true
 
 run:
 	dotnet run --project IPK_Project.csproj -- $(ARGS)
