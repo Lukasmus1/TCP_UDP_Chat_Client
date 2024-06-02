@@ -17,7 +17,7 @@ public static class StatesBehaviour
 
         string? input = inputs.Dequeue();
         
-        string[] splitInput = input!.ToLower().Split(" ");
+        string[] splitInput = input!.Split(" ");
         switch (splitInput[0])
         {
             case "/auth":
